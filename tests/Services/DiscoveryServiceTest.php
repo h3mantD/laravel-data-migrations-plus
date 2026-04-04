@@ -102,3 +102,46 @@ it('returns file paths via getFilePath', function () {
     $path = $this->service->getFilePath('2026_04_01_100000_add_roles', MigrationScope::Central);
     expect($path)->toBe($this->centralDir.'/2026_04_01_100000_add_roles.php');
 });
+
+it('includes extra_paths in discovery', function () {
+    $extraDir = sys_get_temp_dir().'/data-migration-tests/extra';
+    @mkdir($extraDir, 0755, true);
+
+    config()->set('data-migrations.extra_paths', [$extraDir]);
+
+    $stub = <<<'PHP'
+    <?php
+    use H3mantd\DataMigrations\DataMigration;
+    use H3mantd\DataMigrations\DataMigrationContext;
+    return new class extends DataMigration {
+        public function up(DataMigrationContext $context): void {}
+    };
+    PHP;
+    file_put_contents($extraDir.'/2026_04_01_100000_extra.php', $stub);
+
+    $service = new DiscoveryService;
+    $migrations = $service->discover(MigrationScope::Central);
+
+    expect($migrations)->toHaveKey('2026_04_01_100000_extra');
+
+    array_map('unlink', glob($extraDir.'/*'));
+    @rmdir($extraDir);
+});
+
+it('ignores files that do not return DataMigration instances', function () {
+    file_put_contents($this->centralDir.'/2026_04_01_100000_bad.php', '<?php return "not a migration";');
+
+    $stub = <<<'PHP'
+    <?php
+    use H3mantd\DataMigrations\DataMigration;
+    use H3mantd\DataMigrations\DataMigrationContext;
+    return new class extends DataMigration {
+        public function up(DataMigrationContext $context): void {}
+    };
+    PHP;
+    file_put_contents($this->centralDir.'/2026_04_01_200000_good.php', $stub);
+
+    $migrations = $this->service->discover(MigrationScope::Central);
+    expect($migrations)->toHaveCount(1);
+    expect($migrations)->toHaveKey('2026_04_01_200000_good');
+});

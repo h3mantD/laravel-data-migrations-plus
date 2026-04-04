@@ -60,3 +60,32 @@ it('generates a timestamped filename', function () {
     $filename = basename($files[0]);
     expect($filename)->toMatch('/^\d{4}_\d{2}_\d{2}_\d{6}_add_roles\.php$/');
 });
+
+it('rejects invalid scope', function () {
+    $this->artisan('make:data-migration', ['name' => 'Test', '--scope' => 'bogus'])
+        ->assertFailed();
+});
+
+it('rejects invalid type', function () {
+    $this->artisan('make:data-migration', ['name' => 'Test', '--type' => 'invalid'])
+        ->assertFailed();
+});
+
+it('rejects names with path traversal characters', function () {
+    $this->artisan('make:data-migration', ['name' => '../../etc/evil'])
+        ->assertFailed();
+});
+
+it('supports --path option', function () {
+    $customPath = sys_get_temp_dir().'/dm-custom-path-test';
+    @mkdir($customPath, 0755, true);
+
+    $this->artisan('make:data-migration', ['name' => 'CustomPath', '--path' => $customPath])
+        ->assertSuccessful();
+
+    $files = glob($customPath.'/*_custom_path.php');
+    expect($files)->toHaveCount(1);
+
+    array_map('unlink', glob($customPath.'/*'));
+    @rmdir($customPath);
+});

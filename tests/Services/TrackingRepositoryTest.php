@@ -111,3 +111,31 @@ it('deletes record on markRolledBack', function () {
     $this->repo->markRolledBack($id);
     expect($this->repo->getAll(MigrationScope::Central, null))->toBeEmpty();
 });
+
+it('returns all records by scope regardless of target_key', function () {
+    $this->repo->recordStart('2026_04_01_100000_a', MigrationScope::Tenant, 'acme-1', 'testing', 1, null);
+    $this->repo->recordStart('2026_04_01_100000_a', MigrationScope::Tenant, 'acme-2', 'testing', 1, null);
+
+    $all = $this->repo->getAllByScope(MigrationScope::Tenant);
+    expect($all)->toHaveCount(2);
+});
+
+it('returns distinct target keys', function () {
+    $this->repo->recordStart('2026_04_01_100000_a', MigrationScope::Tenant, 'acme-1', 'testing', 1, null);
+    $this->repo->recordStart('2026_04_01_100000_b', MigrationScope::Tenant, 'acme-1', 'testing', 1, null);
+    $this->repo->recordStart('2026_04_01_100000_a', MigrationScope::Tenant, 'acme-2', 'testing', 1, null);
+
+    $keys = $this->repo->getDistinctTargetKeys(MigrationScope::Tenant);
+    expect($keys)->toHaveCount(2);
+    expect($keys->toArray())->toContain('acme-1');
+    expect($keys->toArray())->toContain('acme-2');
+});
+
+it('returns pending migration names', function () {
+    $id = $this->repo->recordStart('2026_04_01_100000_a', MigrationScope::Central, null, 'testing', 1, null);
+    $this->repo->recordFailure($id, 'err', 10);
+    $this->repo->resetForRetry($id);
+
+    $pending = $this->repo->getPending(MigrationScope::Central, null);
+    expect($pending)->toContain('2026_04_01_100000_a');
+});

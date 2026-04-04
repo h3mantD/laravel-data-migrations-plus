@@ -57,3 +57,36 @@ it('outputs json format', function () {
         ->assertSuccessful()
         ->expectsOutputToContain('"migrations"');
 });
+
+it('shows tenant records when --scope=tenant without --tenant', function () {
+    $repo = app(TrackingRepository::class);
+    $id = $repo->recordStart('2026_04_01_100000_tenant_migration', MigrationScope::Tenant, 'acme-1', 'testing', 1, null);
+    $repo->recordSuccess($id, 100);
+
+    $this->artisan('data-migrate:status', ['--scope' => 'tenant', '--json' => true])
+        ->assertSuccessful()
+        ->expectsOutputToContain('2026_04_01_100000_tenant_migration');
+});
+
+it('shows pending migrations with --pending filter', function () {
+    $stub = <<<'PHP'
+    <?php
+    use H3mantd\DataMigrations\DataMigration;
+    use H3mantd\DataMigrations\DataMigrationContext;
+    return new class extends DataMigration {
+        public function up(DataMigrationContext $context): void {}
+    };
+    PHP;
+    file_put_contents($this->centralDir.'/2026_04_01_100000_pending_one.php', $stub);
+
+    // Also add a completed one that should NOT show
+    $repo = app(TrackingRepository::class);
+    $id = $repo->recordStart('2026_04_01_100000_pending_one', MigrationScope::Central, null, 'testing', 1, null);
+    $repo->recordSuccess($id, 100);
+
+    file_put_contents($this->centralDir.'/2026_04_02_100000_actual_pending.php', $stub);
+
+    $this->artisan('data-migrate:status', ['--scope' => 'central', '--pending' => true, '--json' => true])
+        ->assertSuccessful()
+        ->expectsOutputToContain('2026_04_02_100000_actual_pending');
+});

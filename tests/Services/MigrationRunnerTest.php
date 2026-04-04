@@ -9,6 +9,8 @@ use H3mantd\DataMigrations\Services\DiscoveryService;
 use H3mantd\DataMigrations\Services\LockService;
 use H3mantd\DataMigrations\Services\MigrationRunner;
 use H3mantd\DataMigrations\Services\TrackingRepository;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 beforeEach(function () {
     $this->discovery = Mockery::mock(DiscoveryService::class);
@@ -237,4 +239,122 @@ it('calls validate() before up()', function () {
 
     $result = $this->runner->run(scope: MigrationScope::Central, targetKey: null, pretend: false, continueOnFailure: false);
     expect($result->failed)->toHaveCount(1);
+});
+
+it('runs migrations within a transaction when transactional is true', function () {
+    // Create a test table to verify transactional behavior
+    Schema::create('runner_test_table', function ($table) {
+        $table->id();
+        $table->string('name');
+    });
+
+    $migration = new class extends DataMigration
+    {
+        public bool $transactional = true;
+
+        public function up(DataMigrationContext $context): void
+        {
+            $context->connection->table('runner_test_table')->insert(['name' => 'test']);
+            throw new RuntimeException('Fail after insert');
+        }
+    };
+
+    $this->discovery->shouldReceive('discover')
+        ->with(MigrationScope::Central)
+        ->andReturn(['2026_04_01_100000_txn_test' => $migration]);
+    $this->discovery->shouldReceive('getFilePath')->andReturn('/tmp/fake.php');
+
+    $this->runner->run(
+        scope: MigrationScope::Central,
+        targetKey: null, pretend: false, continueOnFailure: false,
+    );
+
+    // The insert should have been rolled back by the transaction
+    expect(DB::table('runner_test_table')->count())->toBe(0);
+
+    Schema::dropIfExists('runner_test_table');
+});
+
+it('runs specific migration by name', function () {
+    $ran1 = false;
+    $ran2 = false;
+
+    $migration1 = new class($ran1) extends DataMigration
+    {
+        public bool $transactional = false;
+
+        public function __construct(private bool &$ran) {}
+
+        public function up(DataMigrationContext $context): void
+        {
+            $this->ran = true;
+        }
+    };
+    $migration2 = new class($ran2) extends DataMigration
+    {
+        public bool $transactional = false;
+
+        public function __construct(private bool &$ran) {}
+
+        public function up(DataMigrationContext $context): void
+        {
+            $this->ran = true;
+        }
+    };
+
+    $this->discovery->shouldReceive('discover')
+        ->with(MigrationScope::Central)
+        ->andReturn([
+            '2026_04_01_100000_first' => $migration1,
+            '2026_04_01_200000_second' => $migration2,
+        ]);
+    $this->discovery->shouldReceive('getFilePath')->andReturn('/tmp/fake.php');
+
+    $result = $this->runner->run(
+        scope: MigrationScope::Central,
+        targetKey: null, pretend: false, continueOnFailure: false,
+        specificName: '2026_04_01_200000_second',
+    );
+
+    expect($ran1)->toBeFalse();
+    expect($ran2)->toBeTrue();
+    expect($result->successful)->toBe(['2026_04_01_200000_second']);
+});
+
+it('iterates tenants via adapter when targetKey is null', function () {
+    $ran = false;
+    $migration = new class($ran) extends DataMigration
+    {
+        public bool $transactional = false;
+
+        public function __construct(private bool &$ran) {}
+
+        public function up(DataMigrationContext $context): void
+        {
+            $this->ran = true;
+        }
+    };
+
+    $this->tenantAdapter->shouldReceive('tenants')->andReturn(['tenant-a', 'tenant-b']);
+    $this->tenantAdapter->shouldReceive('enter')->twice();
+    $this->tenantAdapter->shouldReceive('leave')->twice();
+    $this->tenantAdapter->shouldReceive('tenantKey')
+        ->with('tenant-a')->andReturn('key-a')
+        ->shouldReceive('tenantKey')
+        ->with('tenant-b')->andReturn('key-b');
+    $this->tenantAdapter->shouldReceive('connectionName')->andReturn('testing');
+
+    $this->discovery->shouldReceive('discover')
+        ->with(MigrationScope::Tenant)
+        ->andReturn(['2026_04_01_100000_tenant_mig' => $migration]);
+    $this->discovery->shouldReceive('getFilePath')->andReturn('/tmp/fake.php');
+
+    $result = $this->runner->run(
+        scope: MigrationScope::Tenant,
+        targetKey: null,
+        pretend: false,
+        continueOnFailure: false,
+    );
+
+    expect($result->successful)->toHaveCount(2);
 });

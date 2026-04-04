@@ -49,3 +49,35 @@ it('outputs json when --json is passed', function () {
         ->assertSuccessful()
         ->expectsOutputToContain('"retried"');
 });
+
+it('requires --force in production', function () {
+    app()->detectEnvironment(fn () => 'production');
+    $this->artisan('data-migrate:retry')->assertFailed();
+});
+
+it('does not run unrelated pending migrations during retry', function () {
+    $stub_good = <<<'PHP'
+    <?php
+    use H3mantd\DataMigrations\DataMigration;
+    use H3mantd\DataMigrations\DataMigrationContext;
+    return new class extends DataMigration {
+        public bool $transactional = false;
+        public function up(DataMigrationContext $context): void {}
+    };
+    PHP;
+
+    file_put_contents($this->centralDir.'/2026_04_01_100000_was_broken.php', $stub_good);
+    file_put_contents($this->centralDir.'/2026_04_02_100000_unrelated_new.php', $stub_good);
+
+    // Only mark the first as failed
+    $repo = app(TrackingRepository::class);
+    $id = $repo->recordStart('2026_04_01_100000_was_broken', MigrationScope::Central, null, 'testing', 1, null);
+    $repo->recordFailure($id, 'error', 10);
+
+    $this->artisan('data-migrate:retry', ['--scope' => 'central'])->assertSuccessful();
+
+    // The unrelated new migration should NOT have been run
+    $completed = $repo->getCompleted(MigrationScope::Central, null);
+    expect($completed)->toContain('2026_04_01_100000_was_broken');
+    expect($completed)->not->toContain('2026_04_02_100000_unrelated_new');
+});

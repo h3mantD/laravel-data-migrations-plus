@@ -90,3 +90,20 @@ it('supports --step option', function () {
     expect($completed)->toContain('2026_04_01_100000_batch1');
     expect($completed)->not->toContain('2026_04_02_100000_batch2');
 });
+
+it('requires --force in production', function () {
+    app()->detectEnvironment(fn () => 'production');
+    $this->artisan('data-migrate:rollback')->assertFailed();
+});
+
+it('runs in production with --force', function () {
+    app()->detectEnvironment(fn () => 'production');
+    $this->artisan('data-migrate:rollback', ['--scope' => 'central', '--force' => true])
+        ->assertSuccessful();
+});
+
+it('outputs json format', function () {
+    $this->artisan('data-migrate:rollback', ['--scope' => 'central', '--json' => true])
+        ->assertSuccessful()
+        ->expectsOutputToContain('"rolled_back"');
+});
