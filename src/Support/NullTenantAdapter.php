@@ -9,6 +9,7 @@ use RuntimeException;
 
 class NullTenantAdapter implements TenantAdapter
 {
+    /** @return iterable<mixed> */
     public function tenants(): iterable
     {
         throw new RuntimeException('No tenant adapter configured. Set data-migrations.tenant_adapter in your config.');

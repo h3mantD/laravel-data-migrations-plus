@@ -12,6 +12,10 @@ class DataMigrationHelpers
         private readonly Connection $connection,
     ) {}
 
+    /**
+     * @param  array<string, mixed>  $attributes
+     * @param  array<string, mixed>  $values
+     */
     public function ensureRecord(string $table, array $attributes, array $values = []): void
     {
         $exists = $this->connection->table($table)->where($attributes)->exists();
@@ -20,6 +24,7 @@ class DataMigrationHelpers
         }
     }
 
+    /** @param array<string, mixed> $where */
     public function updateWhereNull(string $table, string $column, mixed $value, array $where = []): void
     {
         $query = $this->connection->table($table)->whereNull($column);
@@ -29,6 +34,7 @@ class DataMigrationHelpers
         $query->update([$column => $value]);
     }
 
+    /** @param array<string, string> $mapping */
     public function normalizeColumn(string $table, string $column, array $mapping): void
     {
         foreach ($mapping as $oldValue => $newValue) {

@@ -11,7 +11,9 @@ use LogicException;
 abstract class DataMigration
 {
     public MigrationScope $scope = MigrationScope::Central;
+
     public MigrationType $type = MigrationType::Bootstrap;
+
     public bool $transactional = true;
 
     public function validate(DataMigrationContext $context): void {}

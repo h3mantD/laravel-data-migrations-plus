@@ -13,7 +13,8 @@ class ChecksumService
         if (! file_exists($filePath)) {
             throw new RuntimeException("Migration file not found: {$filePath}");
         }
-        return hash('sha256', file_get_contents($filePath));
+
+        return hash('sha256', (string) file_get_contents($filePath));
     }
 
     public function hasDrifted(string $filePath, string $storedChecksum): bool

@@ -6,9 +6,14 @@ namespace H3mantd\DataMigrations\Contracts;
 
 interface TenantAdapter
 {
+    /** @return iterable<mixed> */
     public function tenants(): iterable;
+
     public function enter(mixed $tenant): void;
+
     public function leave(): void;
+
     public function tenantKey(mixed $tenant): string;
+
     public function connectionName(): string;
 }
