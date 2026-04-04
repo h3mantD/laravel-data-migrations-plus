@@ -32,8 +32,20 @@ class MakeDataMigrationCommand extends Command
         /** @var string $type */
         $type = $this->option('type');
 
+        if (! in_array($scope, ['central', 'tenant'], true)) {
+            $this->error("Invalid scope: {$scope}. Valid scopes: central, tenant");
+
+            return self::FAILURE;
+        }
+
         if (! MigrationType::tryFrom($type)) {
             $this->error("Invalid type: {$type}. Valid types: bootstrap, transform, backfill, reconcile, cleanup");
+
+            return self::FAILURE;
+        }
+
+        if (preg_match('/[^a-zA-Z0-9_]/', $name)) {
+            $this->error("Invalid name: {$name}. Name must contain only alphanumeric characters and underscores.");
 
             return self::FAILURE;
         }

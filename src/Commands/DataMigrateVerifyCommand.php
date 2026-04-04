@@ -29,7 +29,8 @@ class DataMigrateVerifyCommand extends Command
 
         foreach ([MigrationScope::Central, MigrationScope::Tenant] as $scope) {
             $discovered = $discovery->discover($scope);
-            $tracked = $tracking->getAll($scope, null);
+            // For verify, we check ALL records regardless of target_key
+            $tracked = $tracking->getAllByScope($scope);
 
             foreach ($tracked as $record) {
                 /** @var string $migrationName */

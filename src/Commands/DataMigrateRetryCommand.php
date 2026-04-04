@@ -14,12 +14,19 @@ class DataMigrateRetryCommand extends Command
     public $signature = 'data-migrate:retry
         {--scope=all : Scope to retry (central, tenant, or all)}
         {--tenant= : Retry for a specific tenant}
+        {--force : Required in production}
         {--json : Output as JSON}';
 
     public $description = 'Retry failed data migrations';
 
     public function handle(TrackingRepository $tracking, MigrationRunner $runner): int
     {
+        if (app()->isProduction() && ! $this->option('force')) {
+            $this->components->error('Use --force to run in production.');
+
+            return self::FAILURE;
+        }
+
         /** @var string $scope */
         $scope = $this->option('scope');
         /** @var string|null $tenantKey */
@@ -48,18 +55,23 @@ class DataMigrateRetryCommand extends Command
             foreach ($failed as $record) {
                 /** @var int $recordId */
                 $recordId = $record->id;
-                $tracking->resetForRetry($recordId);
+                /** @var string $migrationName */
+                $migrationName = $record->migration_name;
+
+                // Delete the failed record so the runner can insert a fresh one
+                $tracking->markRolledBack($recordId);
+
+                $result = $runner->run(
+                    scope: $migrationScope,
+                    targetKey: $targetKey,
+                    pretend: false,
+                    continueOnFailure: true,
+                    specificName: $migrationName,
+                );
+
+                $retried = array_merge($retried, $result->successful);
+                $failedAgain = array_merge($failedAgain, $result->failed);
             }
-
-            $result = $runner->run(
-                scope: $migrationScope,
-                targetKey: $targetKey,
-                pretend: false,
-                continueOnFailure: true,
-            );
-
-            $retried = array_merge($retried, $result->successful);
-            $failedAgain = array_merge($failedAgain, $result->failed);
         }
 
         if ($json) {

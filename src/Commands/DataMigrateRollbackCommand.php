@@ -19,6 +19,7 @@ class DataMigrateRollbackCommand extends Command
         {--step=1 : Number of batches to rollback}
         {--scope=all : Scope to rollback (central, tenant, or all)}
         {--tenant= : Rollback for a specific tenant}
+        {--force : Required in production}
         {--json : Output as JSON}';
 
     public $description = 'Rollback data migrations (when reversible)';
@@ -29,6 +30,12 @@ class DataMigrateRollbackCommand extends Command
         LockService $lock,
         DatabaseManager $db,
     ): int {
+        if (app()->isProduction() && ! $this->option('force')) {
+            $this->components->error('Use --force to run in production.');
+
+            return self::FAILURE;
+        }
+
         if (! $lock->acquire()) {
             $this->components->error('Could not acquire lock. Another migration may be running.');
 
@@ -71,6 +78,7 @@ class DataMigrateRollbackCommand extends Command
             }
 
             $startBatch = max(1, $lastBatch - $steps + 1);
+            $discovered = $discovery->discover($migrationScope);
 
             for ($batch = $lastBatch; $batch >= $startBatch; $batch--) {
                 $records = $tracking->getByBatch($batch, $migrationScope, $targetKey);
@@ -81,7 +89,6 @@ class DataMigrateRollbackCommand extends Command
                     /** @var string|null $connectionName */
                     $connectionName = $record->connection_name;
 
-                    $discovered = $discovery->discover($migrationScope);
                     $migration = $discovered[$migrationName] ?? null;
 
                     if ($migration === null) {

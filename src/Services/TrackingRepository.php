@@ -120,6 +120,25 @@ class TrackingRepository
     }
 
     /** @return Collection<int, stdClass> */
+    public function getAllByScope(MigrationScope $scope): Collection
+    {
+        return $this->connection()->table($this->table())
+            ->where('scope_type', $scope->value)
+            ->orderBy('id')
+            ->get();
+    }
+
+    /** @return Collection<int|string, mixed> */
+    public function getDistinctTargetKeys(MigrationScope $scope): Collection
+    {
+        return $this->connection()->table($this->table())
+            ->where('scope_type', $scope->value)
+            ->whereNotNull('target_key')
+            ->distinct()
+            ->pluck('target_key');
+    }
+
+    /** @return Collection<int, stdClass> */
     public function getByBatch(int $batch, MigrationScope $scope, ?string $targetKey): Collection
     {
         return $this->scopedQuery($scope, $targetKey)

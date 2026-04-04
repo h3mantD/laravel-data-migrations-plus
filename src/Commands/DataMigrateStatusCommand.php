@@ -43,7 +43,10 @@ class DataMigrateStatusCommand extends Command
         foreach ($scopes as $migrationScope) {
             $targetKey = $migrationScope === MigrationScope::Tenant ? $tenantKey : null;
             $discovered = $discovery->discover($migrationScope);
-            $tracked = $tracking->getAll($migrationScope, $targetKey)->keyBy('migration_name');
+            // For tenant scope without --tenant, show ALL tenant records
+            $tracked = ($migrationScope === MigrationScope::Tenant && $targetKey === null)
+                ? $tracking->getAllByScope($migrationScope)->keyBy('migration_name')
+                : $tracking->getAll($migrationScope, $targetKey)->keyBy('migration_name');
 
             foreach ($discovered as $name => $migration) {
                 $record = $tracked->get($name);
