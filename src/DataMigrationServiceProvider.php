@@ -6,6 +6,7 @@ namespace H3mantd\DataMigrations;
 
 use H3mantd\DataMigrations\Commands\DataMigrateCommand;
 use H3mantd\DataMigrations\Commands\DataMigrateRetryCommand;
+use H3mantd\DataMigrations\Commands\DataMigrateRollbackCommand;
 use H3mantd\DataMigrations\Commands\DataMigrateStatusCommand;
 use H3mantd\DataMigrations\Commands\DataMigrateVerifyCommand;
 use H3mantd\DataMigrations\Commands\MakeDataMigrationCommand;
@@ -34,7 +35,8 @@ class DataMigrationServiceProvider extends PackageServiceProvider
             ->hasCommand(DataMigrateCommand::class)
             ->hasCommand(DataMigrateStatusCommand::class)
             ->hasCommand(DataMigrateVerifyCommand::class)
-            ->hasCommand(DataMigrateRetryCommand::class);
+            ->hasCommand(DataMigrateRetryCommand::class)
+            ->hasCommand(DataMigrateRollbackCommand::class);
     }
 
     public function packageRegistered(): void
