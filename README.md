@@ -344,12 +344,16 @@ return new class extends DataMigration
         $context->helpers()->updateWhereNull('users', 'timezone', 'UTC');
 
         // Backfill display_name from first_name + last_name where it's missing
-        $context->connection->table('users')
+        $users = $context->connection->table('users')
             ->whereNull('display_name')
             ->whereNotNull('first_name')
-            ->update([
-                'display_name' => $context->connection->raw("first_name || ' ' || last_name"),
-            ]);
+            ->get();
+
+        foreach ($users as $user) {
+            $context->connection->table('users')
+                ->where('id', $user->id)
+                ->update(['display_name' => trim($user->first_name.' '.$user->last_name)]);
+        }
 
         // Backfill a computed column from related data
         $usersWithoutCompany = $context->connection->table('users')
@@ -504,7 +508,9 @@ public function up(DataMigrationContext $context): void
     // For tenant migrations: the tenant's connection
     $context->connection;
 
-    // The migration scope (MigrationScope::Central or MigrationScope::Tenant)
+    // The migration scope — automatically set based on the file's directory
+    // MigrationScope::Central for database/data-migrations/
+    // MigrationScope::Tenant for database/data-migrations/tenant/
     $context->scope;
 
     // The tenant identifier (null for central migrations)
@@ -543,8 +549,8 @@ public function up(DataMigrationContext $context): void
 
     // Transactions (manual, when $transactional = false)
     $db->transaction(function () use ($db) {
-        $db->table('accounts')->insert(['name' => 'System']);
-        $db->table('wallets')->insert(['account_id' => $db->getPdo()->lastInsertId()]);
+        $accountId = $db->table('accounts')->insertGetId(['name' => 'System']);
+        $db->table('wallets')->insert(['account_id' => $accountId]);
     });
 
     // Schema checks
@@ -1138,7 +1144,7 @@ All migration execution is recorded in the `data_migrations` table on your centr
 | `target_key` | string, nullable | Tenant identifier (`null` for central) |
 | `connection_name` | string | Database connection used for execution |
 | `batch` | integer | Groups migrations that ran together |
-| `status` | string | `running`, `completed`, or `failed` |
+| `status` | string | `pending`, `running`, `completed`, or `failed` |
 | `checksum` | string, nullable | SHA-256 hash of the file at execution time |
 | `started_at` | timestamp | When execution began |
 | `completed_at` | timestamp | When execution finished |
