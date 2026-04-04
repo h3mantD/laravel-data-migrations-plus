@@ -161,13 +161,10 @@ declare(strict_types=1);
 
 use H3mantd\DataMigrations\DataMigration;
 use H3mantd\DataMigrations\DataMigrationContext;
-use H3mantd\DataMigrations\Enums\MigrationScope;
 use H3mantd\DataMigrations\Enums\MigrationType;
 
 return new class extends DataMigration
 {
-    public MigrationScope $scope = MigrationScope::Central;
-
     public MigrationType $type = MigrationType::Bootstrap;
 
     public bool $transactional = true;
@@ -179,30 +176,43 @@ return new class extends DataMigration
 };
 ```
 
-Data migrations have three public properties. `$scope` and `$transactional` control execution behavior. `$type` is informational metadata. Each is described in detail below.
+Data migrations have two public properties and one required method:
 
 | Property | Type | Default | Affects Execution | Description |
 |---|---|---|---|---|
-| `$scope` | `MigrationScope` | `Central` | **Yes** | Determines whether the migration runs centrally or per-tenant |
 | `$type` | `MigrationType` | `Bootstrap` | No | Informational label visible in `data-migrate:show` |
 | `$transactional` | `bool` | `true` | **Yes** | Whether `up()` is wrapped in a database transaction |
 
 ### Migration Scope
 
-The `$scope` property determines where the migration runs. There are two scopes:
+A migration's scope is determined by **which directory it lives in** — not by a property on the class. This keeps it simple: the file path is the single source of truth.
 
-#### `MigrationScope::Central`
+| Directory | Scope | How it runs |
+|---|---|---|
+| `database/data-migrations/` | Central | Runs once against the main application database |
+| `database/data-migrations/tenant/` | Tenant | Runs once **per tenant** via the configured TenantAdapter |
 
-Central migrations run once against the main application database. They are the default scope. Use central migrations for application-wide data: system configuration, global lookup tables, shared reference data.
+Use the `--scope` option when generating to place the file in the correct directory:
+
+```bash
+# Creates in database/data-migrations/
+php artisan make:data-migration SeedFeatureFlags
+
+# Creates in database/data-migrations/tenant/
+php artisan make:data-migration SeedTenantSettings --scope=tenant
+```
+
+#### Central Migrations
+
+Central migrations run once against the main application database. Use them for application-wide data: system configuration, global lookup tables, shared reference data.
 
 ```php
+// database/data-migrations/2026_04_01_100000_seed_feature_flags.php
+
 return new class extends DataMigration
 {
-    public MigrationScope $scope = MigrationScope::Central;
-
     public function up(DataMigrationContext $context): void
     {
-        // Seed application-wide feature flags
         $helpers = $context->helpers();
         $helpers->ensureRecord('feature_flags', ['key' => 'dark_mode'], ['enabled' => false]);
         $helpers->ensureRecord('feature_flags', ['key' => 'api_v2'], ['enabled' => true]);
@@ -210,15 +220,15 @@ return new class extends DataMigration
 };
 ```
 
-#### `MigrationScope::Tenant`
+#### Tenant Migrations
 
 Tenant migrations run once **per tenant**. When you execute `php artisan data-migrate --scope=tenant`, the package iterates through all tenants (via your configured [TenantAdapter](#the-tenantadapter-contract)), enters each tenant's context, and runs any pending tenant migrations against that tenant's database.
 
 ```php
+// database/data-migrations/tenant/2026_04_01_100000_seed_tenant_settings.php
+
 return new class extends DataMigration
 {
-    public MigrationScope $scope = MigrationScope::Tenant;
-
     public function up(DataMigrationContext $context): void
     {
         // $context->targetKey is the tenant identifier (e.g., 'acme', 'globex')

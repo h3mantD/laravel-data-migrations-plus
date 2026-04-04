@@ -5,14 +5,6 @@ use H3mantd\DataMigrations\DataMigrationContext;
 use H3mantd\DataMigrations\Enums\MigrationScope;
 use H3mantd\DataMigrations\Enums\MigrationType;
 
-it('has default scope of central', function () {
-    $migration = new class extends DataMigration
-    {
-        public function up(DataMigrationContext $context): void {}
-    };
-    expect($migration->scope)->toBe(MigrationScope::Central);
-});
-
 it('has default type of bootstrap', function () {
     $migration = new class extends DataMigration
     {

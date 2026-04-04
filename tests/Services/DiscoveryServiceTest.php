@@ -41,9 +41,7 @@ it('discovers tenant migrations from configured path', function () {
     <?php
     use H3mantd\DataMigrations\DataMigration;
     use H3mantd\DataMigrations\DataMigrationContext;
-    use H3mantd\DataMigrations\Enums\MigrationScope;
     return new class extends DataMigration {
-        public \H3mantd\DataMigrations\Enums\MigrationScope $scope = MigrationScope::Tenant;
         public function up(DataMigrationContext $context): void {}
     };
     PHP;

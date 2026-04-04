@@ -4,14 +4,11 @@ declare(strict_types=1);
 
 namespace H3mantd\DataMigrations;
 
-use H3mantd\DataMigrations\Enums\MigrationScope;
 use H3mantd\DataMigrations\Enums\MigrationType;
 use LogicException;
 
 abstract class DataMigration
 {
-    public MigrationScope $scope = MigrationScope::Central;
-
     public MigrationType $type = MigrationType::Bootstrap;
 
     public bool $transactional = true;

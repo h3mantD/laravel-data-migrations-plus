@@ -28,7 +28,7 @@ it('creates a central data migration file', function () {
     expect($files)->toHaveCount(1);
     $content = file_get_contents($files[0]);
     expect($content)->toContain('extends DataMigration');
-    expect($content)->toContain('MigrationScope::Central');
+    expect($content)->toContain('MigrationType::Bootstrap');
 });
 
 it('creates a tenant data migration file', function () {
@@ -36,7 +36,7 @@ it('creates a tenant data migration file', function () {
     $files = File::glob($this->tenantDir.'/*_backfill_device_status.php');
     expect($files)->toHaveCount(1);
     $content = file_get_contents($files[0]);
-    expect($content)->toContain('MigrationScope::Tenant');
+    expect($content)->toContain('$context->targetKey');
 });
 
 it('creates a migration with a type', function () {
