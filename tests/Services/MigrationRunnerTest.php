@@ -12,7 +12,7 @@ use H3mantd\DataMigrations\Services\TrackingRepository;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
-beforeEach(function () {
+beforeEach(function (): void {
     $this->discovery = Mockery::mock(DiscoveryService::class);
     $this->tracking = app(TrackingRepository::class);
     $this->checksum = new ChecksumService;
@@ -32,7 +32,7 @@ beforeEach(function () {
     );
 });
 
-it('runs pending central migrations', function () {
+it('runs pending central migrations', function (): void {
     $ran = false;
     $migration = new class($ran) extends DataMigration
     {
@@ -61,7 +61,7 @@ it('runs pending central migrations', function () {
     expect($result->failed)->toBeEmpty();
 });
 
-it('skips already completed migrations', function () {
+it('skips already completed migrations', function (): void {
     $ran = false;
     $migration = new class($ran) extends DataMigration
     {
@@ -89,7 +89,7 @@ it('skips already completed migrations', function () {
     expect($result->successful)->toBeEmpty();
 });
 
-it('records failure when migration throws', function () {
+it('records failure when migration throws', function (): void {
     $migration = new class extends DataMigration
     {
         public bool $transactional = false;
@@ -116,7 +116,7 @@ it('records failure when migration throws', function () {
     expect($failed->first()->error_message)->toContain('Migration exploded');
 });
 
-it('stops on failure by default', function () {
+it('stops on failure by default', function (): void {
     $secondRan = false;
 
     $broken = new class extends DataMigration
@@ -152,7 +152,7 @@ it('stops on failure by default', function () {
     expect($secondRan)->toBeFalse();
 });
 
-it('continues on failure when flag is set', function () {
+it('continues on failure when flag is set', function (): void {
     $secondRan = false;
 
     $broken = new class extends DataMigration
@@ -190,7 +190,7 @@ it('continues on failure when flag is set', function () {
     expect($result->successful)->toHaveCount(1);
 });
 
-it('pretend mode does not execute migrations', function () {
+it('pretend mode does not execute migrations', function (): void {
     $ran = false;
     $migration = new class($ran) extends DataMigration
     {
@@ -212,14 +212,14 @@ it('pretend mode does not execute migrations', function () {
     expect($result->pretended)->toHaveCount(1);
 });
 
-it('fails when lock cannot be acquired', function () {
+it('fails when lock cannot be acquired', function (): void {
     $this->lock->shouldReceive('acquire')->andReturn(false);
 
     $result = $this->runner->run(scope: MigrationScope::Central, targetKey: null, pretend: false, continueOnFailure: false);
     expect($result->lockFailed)->toBeTrue();
 });
 
-it('calls validate() before up()', function () {
+it('calls validate() before up()', function (): void {
     $migration = new class extends DataMigration
     {
         public bool $transactional = false;
@@ -241,9 +241,9 @@ it('calls validate() before up()', function () {
     expect($result->failed)->toHaveCount(1);
 });
 
-it('runs migrations within a transaction when transactional is true', function () {
+it('runs migrations within a transaction when transactional is true', function (): void {
     // Create a test table to verify transactional behavior
-    Schema::create('runner_test_table', function ($table) {
+    Schema::create('runner_test_table', function ($table): void {
         $table->id();
         $table->string('name');
     });
@@ -275,7 +275,7 @@ it('runs migrations within a transaction when transactional is true', function (
     Schema::dropIfExists('runner_test_table');
 });
 
-it('runs specific migration by name', function () {
+it('runs specific migration by name', function (): void {
     $ran1 = false;
     $ran2 = false;
 
@@ -321,7 +321,7 @@ it('runs specific migration by name', function () {
     expect($result->successful)->toBe(['2026_04_01_200000_second']);
 });
 
-it('iterates tenants via adapter when targetKey is null', function () {
+it('iterates tenants via adapter when targetKey is null', function (): void {
     $ran = false;
     $migration = new class($ran) extends DataMigration
     {

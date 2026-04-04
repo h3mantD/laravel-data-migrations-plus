@@ -39,7 +39,7 @@ class DataMigrateVerifyCommand extends Command
                 if (! isset($discovered[$migrationName])) {
                     $filePath = $discovery->getFilePath($migrationName, $scope);
                     if ($filePath === null) {
-                        $errors[] = "Missing file: {$migrationName} ({$scope->value}) was run but file no longer exists.";
+                        $errors[] = sprintf('Missing file: %s (%s) was run but file no longer exists.', $migrationName, $scope->value);
                     }
                 }
             }
@@ -54,12 +54,14 @@ class DataMigrateVerifyCommand extends Command
                     if ($storedChecksum === null) {
                         continue;
                     }
+
                     $filePath = $discovery->getFilePath($migrationName, $scope);
                     if ($filePath === null) {
                         continue;
                     }
+
                     if ($checksum->hasDrifted($filePath, $storedChecksum)) {
-                        $message = "Checksum drift: {$migrationName} ({$scope->value}) has been modified since execution.";
+                        $message = sprintf('Checksum drift: %s (%s) has been modified since execution.', $migrationName, $scope->value);
                         if ($failOnDrift) {
                             $errors[] = $message;
                         } else {
@@ -73,6 +75,7 @@ class DataMigrateVerifyCommand extends Command
         foreach ($warnings as $warning) {
             $this->components->warn($warning);
         }
+
         foreach ($errors as $error) {
             $this->components->error($error);
         }
@@ -80,6 +83,7 @@ class DataMigrateVerifyCommand extends Command
         if (count($errors) > 0) {
             return self::FAILURE;
         }
+
         if ($strict && count($warnings) > 0) {
             return self::FAILURE;
         }

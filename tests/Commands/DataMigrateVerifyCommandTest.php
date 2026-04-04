@@ -4,31 +4,31 @@ use H3mantd\DataMigrations\Enums\MigrationScope;
 use H3mantd\DataMigrations\Services\ChecksumService;
 use H3mantd\DataMigrations\Services\TrackingRepository;
 
-beforeEach(function () {
+beforeEach(function (): void {
     $this->centralDir = sys_get_temp_dir().'/dm-verify-test/central';
     @mkdir($this->centralDir, 0755, true);
     config()->set('data-migrations.central_path', $this->centralDir);
     config()->set('data-migrations.tenant_path', sys_get_temp_dir().'/dm-verify-test/tenant');
 });
 
-afterEach(function () {
-    array_map('unlink', glob($this->centralDir.'/*'));
+afterEach(function (): void {
+    array_map(unlink(...), glob($this->centralDir.'/*'));
     @rmdir($this->centralDir);
     @rmdir(dirname($this->centralDir));
 });
 
-it('passes when no issues found', function () {
+it('passes when no issues found', function (): void {
     $this->artisan('data-migrate:verify')->assertSuccessful();
 });
 
-it('detects missing migration files', function () {
+it('detects missing migration files', function (): void {
     $repo = app(TrackingRepository::class);
     $id = $repo->recordStart('2026_04_01_100000_gone', MigrationScope::Central, null, 'testing', 1, 'abc');
     $repo->recordSuccess($id, 100);
     $this->artisan('data-migrate:verify', ['--strict' => true])->assertFailed();
 });
 
-it('detects checksum drift', function () {
+it('detects checksum drift', function (): void {
     $stub = <<<'PHP'
     <?php
     use H3mantd\DataMigrations\DataMigration;
@@ -53,7 +53,7 @@ it('detects checksum drift', function () {
     $this->artisan('data-migrate:verify')->assertFailed();
 });
 
-it('warns on drift but passes without --strict when fail_on_drift is false', function () {
+it('warns on drift but passes without --strict when fail_on_drift is false', function (): void {
     config()->set('data-migrations.checksum.fail_on_drift', false);
 
     $stub = <<<'PHP'
@@ -80,7 +80,7 @@ it('warns on drift but passes without --strict when fail_on_drift is false', fun
     $this->artisan('data-migrate:verify')->assertSuccessful();
 });
 
-it('passes when checksums are disabled', function () {
+it('passes when checksums are disabled', function (): void {
     config()->set('data-migrations.checksum.enabled', false);
 
     $stub = <<<'PHP'
@@ -106,7 +106,7 @@ it('passes when checksums are disabled', function () {
     $this->artisan('data-migrate:verify')->assertSuccessful();
 });
 
-it('verifies tenant migration records', function () {
+it('verifies tenant migration records', function (): void {
     $repo = app(TrackingRepository::class);
     // Record a tenant migration as completed but with no file on disk
     $id = $repo->recordStart('2026_04_01_100000_gone_tenant', MigrationScope::Tenant, 'acme-1', 'testing', 1, 'abc');

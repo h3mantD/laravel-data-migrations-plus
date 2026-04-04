@@ -31,6 +31,7 @@ class DataMigrationHelpers
         foreach ($where as $key => $val) {
             $query->where($key, $val);
         }
+
         $query->update([$column => $value]);
     }
 

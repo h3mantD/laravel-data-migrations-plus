@@ -104,7 +104,7 @@ class DataMigrateRollbackCommand extends Command
                 }
 
                 if (! $enteredTenant) {
-                    $errors[] = "Tenant not found: {$targetKey}";
+                    $errors[] = 'Tenant not found: '.$targetKey;
 
                     continue;
                 }
@@ -121,7 +121,7 @@ class DataMigrateRollbackCommand extends Command
                         $migration = $discovered[$migrationName] ?? null;
 
                         if ($migration === null) {
-                            $errors[] = "File not found for: {$migrationName}";
+                            $errors[] = 'File not found for: '.$migrationName;
 
                             continue;
                         }
@@ -148,7 +148,7 @@ class DataMigrateRollbackCommand extends Command
                             $tracking->markRolledBack($recordId);
                             $rolledBack[] = $migrationName;
                         } catch (Throwable $e) {
-                            $errors[] = "{$migrationName}: {$e->getMessage()}";
+                            $errors[] = sprintf('%s: %s', $migrationName, $e->getMessage());
                         }
                     }
                 }

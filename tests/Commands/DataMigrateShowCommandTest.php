@@ -3,20 +3,20 @@
 use H3mantd\DataMigrations\Enums\MigrationScope;
 use H3mantd\DataMigrations\Services\TrackingRepository;
 
-beforeEach(function () {
+beforeEach(function (): void {
     $this->centralDir = sys_get_temp_dir().'/dm-show-test/central';
     @mkdir($this->centralDir, 0755, true);
     config()->set('data-migrations.central_path', $this->centralDir);
     config()->set('data-migrations.tenant_path', sys_get_temp_dir().'/dm-show-test/tenant');
 });
 
-afterEach(function () {
-    array_map('unlink', glob($this->centralDir.'/*'));
+afterEach(function (): void {
+    array_map(unlink(...), glob($this->centralDir.'/*'));
     @rmdir($this->centralDir);
     @rmdir(dirname($this->centralDir));
 });
 
-it('shows details of a migration with file and execution history', function () {
+it('shows details of a migration with file and execution history', function (): void {
     $stub = <<<'PHP'
     <?php
     use H3mantd\DataMigrations\DataMigration;
@@ -37,7 +37,7 @@ it('shows details of a migration with file and execution history', function () {
         ->expectsOutputToContain('central');
 });
 
-it('shows json output', function () {
+it('shows json output', function (): void {
     $stub = <<<'PHP'
     <?php
     use H3mantd\DataMigrations\DataMigration;
@@ -57,12 +57,12 @@ it('shows json output', function () {
         ->expectsOutputToContain('2026_04_01_100000_json_test');
 });
 
-it('fails for non-existent migration', function () {
+it('fails for non-existent migration', function (): void {
     $this->artisan('data-migrate:show', ['name' => 'nonexistent_migration'])
         ->assertFailed();
 });
 
-it('shows migration that exists on disk but never ran', function () {
+it('shows migration that exists on disk but never ran', function (): void {
     $stub = <<<'PHP'
     <?php
     use H3mantd\DataMigrations\DataMigration;

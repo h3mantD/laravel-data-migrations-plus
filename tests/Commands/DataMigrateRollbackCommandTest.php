@@ -3,20 +3,20 @@
 use H3mantd\DataMigrations\Enums\MigrationScope;
 use H3mantd\DataMigrations\Services\TrackingRepository;
 
-beforeEach(function () {
+beforeEach(function (): void {
     $this->centralDir = sys_get_temp_dir().'/dm-rollback-test/central';
     @mkdir($this->centralDir, 0755, true);
     config()->set('data-migrations.central_path', $this->centralDir);
     config()->set('data-migrations.tenant_path', sys_get_temp_dir().'/dm-rollback-test/tenant');
 });
 
-afterEach(function () {
-    array_map('unlink', glob($this->centralDir.'/*'));
+afterEach(function (): void {
+    array_map(unlink(...), glob($this->centralDir.'/*'));
     @rmdir($this->centralDir);
     @rmdir(dirname($this->centralDir));
 });
 
-it('rolls back the last batch', function () {
+it('rolls back the last batch', function (): void {
     $stub = <<<'PHP'
     <?php
     use H3mantd\DataMigrations\DataMigration;
@@ -39,7 +39,7 @@ it('rolls back the last batch', function () {
     expect($completed)->not->toContain('2026_04_01_100000_reversible');
 });
 
-it('fails when migration is irreversible', function () {
+it('fails when migration is irreversible', function (): void {
     $stub = <<<'PHP'
     <?php
     use H3mantd\DataMigrations\DataMigration;
@@ -58,13 +58,13 @@ it('fails when migration is irreversible', function () {
     $this->artisan('data-migrate:rollback', ['--scope' => 'central'])->assertFailed();
 });
 
-it('reports when nothing to rollback', function () {
+it('reports when nothing to rollback', function (): void {
     $this->artisan('data-migrate:rollback', ['--scope' => 'central'])
         ->assertSuccessful()
         ->expectsOutputToContain('Nothing to rollback');
 });
 
-it('supports --step option', function () {
+it('supports --step option', function (): void {
     $stub = <<<'PHP'
     <?php
     use H3mantd\DataMigrations\DataMigration;
@@ -91,18 +91,18 @@ it('supports --step option', function () {
     expect($completed)->not->toContain('2026_04_02_100000_batch2');
 });
 
-it('requires --force in production', function () {
-    app()->detectEnvironment(fn () => 'production');
+it('requires --force in production', function (): void {
+    app()->detectEnvironment(fn (): string => 'production');
     $this->artisan('data-migrate:rollback')->assertFailed();
 });
 
-it('runs in production with --force', function () {
-    app()->detectEnvironment(fn () => 'production');
+it('runs in production with --force', function (): void {
+    app()->detectEnvironment(fn (): string => 'production');
     $this->artisan('data-migrate:rollback', ['--scope' => 'central', '--force' => true])
         ->assertSuccessful();
 });
 
-it('outputs json format', function () {
+it('outputs json format', function (): void {
     $this->artisan('data-migrate:rollback', ['--scope' => 'central', '--json' => true])
         ->assertSuccessful()
         ->expectsOutputToContain('"rolled_back"');

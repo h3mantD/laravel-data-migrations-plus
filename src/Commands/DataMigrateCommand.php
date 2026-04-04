@@ -47,7 +47,7 @@ class DataMigrateCommand extends Command
 
         if (! $json) {
             $runner->onTenantStart(function (string $key): void {
-                $this->components->twoColumnDetail("Tenant: {$key}", '<fg=cyan>RUNNING</>');
+                $this->components->twoColumnDetail('Tenant: '.$key, '<fg=cyan>RUNNING</>');
             });
         }
 
@@ -77,6 +77,7 @@ class DataMigrateCommand extends Command
 
                 return self::FAILURE;
             }
+
             $results[] = $result;
         }
 
@@ -87,7 +88,7 @@ class DataMigrateCommand extends Command
         }
 
         foreach ($results as $result) {
-            if (count($result->failed) > 0) {
+            if ($result->failed !== []) {
                 return self::FAILURE;
             }
         }
@@ -104,6 +105,7 @@ class DataMigrateCommand extends Command
             $merged['failed'] = array_merge($merged['failed'], $result->failed);
             $merged['pretended'] = array_merge($merged['pretended'], $result->pretended);
         }
+
         $this->line((string) json_encode($merged, JSON_PRETTY_PRINT));
     }
 
@@ -117,17 +119,21 @@ class DataMigrateCommand extends Command
                 foreach ($result->pretended as $name) {
                     $this->components->twoColumnDetail($name, '<fg=yellow;options=bold>PRETEND</>');
                 }
+
                 $hasOutput = true;
             }
+
             foreach ($result->successful as $name) {
                 $this->components->twoColumnDetail($name, '<fg=green;options=bold>DONE</>');
                 $hasOutput = true;
             }
+
             foreach ($result->failed as $name) {
                 $this->components->twoColumnDetail($name, '<fg=red;options=bold>FAILED</>');
                 $hasOutput = true;
             }
         }
+
         if (! $hasOutput) {
             $this->components->info('Nothing to migrate.');
         }

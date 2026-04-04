@@ -75,7 +75,7 @@ class MigrationRunner
 
             $this->tenantAdapter->enter($tenant);
 
-            if ($this->onTenantStart !== null) {
+            if ($this->onTenantStart instanceof \Closure) {
                 ($this->onTenantStart)($targetKey);
             }
 
@@ -102,7 +102,7 @@ class MigrationRunner
             $this->tenantAdapter->enter($tenant);
             $key = $this->tenantAdapter->tenantKey($tenant);
 
-            if ($this->onTenantStart !== null) {
+            if ($this->onTenantStart instanceof \Closure) {
                 ($this->onTenantStart)($key);
             }
 
@@ -112,7 +112,7 @@ class MigrationRunner
                 $allFailed = array_merge($allFailed, $result->failed);
                 $allPretended = array_merge($allPretended, $result->pretended);
 
-                if (! $continueOnFailure && count($result->failed) > 0) {
+                if (! $continueOnFailure && $result->failed !== []) {
                     break;
                 }
             } finally {
@@ -148,8 +148,10 @@ class MigrationRunner
             if ($specificName !== null && $name !== $specificName) {
                 continue;
             }
-
-            if ($completed->contains($name) || $running->contains($name)) {
+            if ($completed->contains($name)) {
+                continue;
+            }
+            if ($running->contains($name)) {
                 continue;
             }
 

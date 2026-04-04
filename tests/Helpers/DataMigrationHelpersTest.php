@@ -4,8 +4,8 @@ use H3mantd\DataMigrations\Helpers\DataMigrationHelpers;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
-beforeEach(function () {
-    Schema::create('test_records', function ($table) {
+beforeEach(function (): void {
+    Schema::create('test_records', function ($table): void {
         $table->id();
         $table->string('name');
         $table->string('email')->nullable();
@@ -15,18 +15,18 @@ beforeEach(function () {
     $this->helpers = new DataMigrationHelpers(DB::connection());
 });
 
-afterEach(function () {
+afterEach(function (): void {
     Schema::dropIfExists('test_records');
 });
 
-describe('ensureRecord', function () {
-    it('inserts a record when it does not exist', function () {
+describe('ensureRecord', function (): void {
+    it('inserts a record when it does not exist', function (): void {
         $this->helpers->ensureRecord('test_records', ['name' => 'admin'], ['email' => 'admin@example.com']);
         expect(DB::table('test_records')->where('name', 'admin')->exists())->toBeTrue();
         expect(DB::table('test_records')->where('name', 'admin')->first()->email)->toBe('admin@example.com');
     });
 
-    it('does not duplicate when record already exists', function () {
+    it('does not duplicate when record already exists', function (): void {
         DB::table('test_records')->insert(['name' => 'admin', 'email' => 'old@example.com']);
         $this->helpers->ensureRecord('test_records', ['name' => 'admin'], ['email' => 'new@example.com']);
         expect(DB::table('test_records')->where('name', 'admin')->count())->toBe(1);
@@ -34,8 +34,8 @@ describe('ensureRecord', function () {
     });
 });
 
-describe('updateWhereNull', function () {
-    it('updates rows where column is null', function () {
+describe('updateWhereNull', function (): void {
+    it('updates rows where column is null', function (): void {
         DB::table('test_records')->insert([
             ['name' => 'alice', 'role' => null],
             ['name' => 'bob', 'role' => 'admin'],
@@ -45,7 +45,7 @@ describe('updateWhereNull', function () {
         expect(DB::table('test_records')->where('name', 'bob')->first()->role)->toBe('admin');
     });
 
-    it('applies additional where conditions', function () {
+    it('applies additional where conditions', function (): void {
         DB::table('test_records')->insert([
             ['name' => 'alice', 'role' => null],
             ['name' => 'bob', 'role' => null],
@@ -56,8 +56,8 @@ describe('updateWhereNull', function () {
     });
 });
 
-describe('normalizeColumn', function () {
-    it('remaps old values to new values', function () {
+describe('normalizeColumn', function (): void {
+    it('remaps old values to new values', function (): void {
         DB::table('test_records')->insert([
             ['name' => 'alice', 'role' => 'admin'],
             ['name' => 'bob', 'role' => 'mod'],

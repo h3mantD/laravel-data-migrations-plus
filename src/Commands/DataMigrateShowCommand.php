@@ -58,7 +58,7 @@ class DataMigrateShowCommand extends Command
         }
 
         if ($migration === null && $records === []) {
-            $this->components->error("Migration not found: {$name}");
+            $this->components->error('Migration not found: '.$name);
 
             return self::FAILURE;
         }

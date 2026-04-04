@@ -5,7 +5,7 @@ use H3mantd\DataMigrations\Enums\MigrationScope;
 use H3mantd\DataMigrations\Helpers\DataMigrationHelpers;
 use Illuminate\Database\Connection;
 
-it('exposes all properties', function () {
+it('exposes all properties', function (): void {
     $connection = $this->app->make('db')->connection();
     $context = new DataMigrationContext(
         connection: $connection,
@@ -17,7 +17,7 @@ it('exposes all properties', function () {
     expect($context->targetKey)->toBeNull();
 });
 
-it('exposes tenant properties', function () {
+it('exposes tenant properties', function (): void {
     $connection = $this->app->make('db')->connection();
     $context = new DataMigrationContext(
         connection: $connection,
@@ -28,7 +28,7 @@ it('exposes tenant properties', function () {
     expect($context->targetKey)->toBe('acme-1');
 });
 
-it('returns helpers instance', function () {
+it('returns helpers instance', function (): void {
     $connection = $this->app->make('db')->connection();
     $context = new DataMigrationContext(
         connection: $connection,

@@ -43,7 +43,6 @@ class DataMigrationServiceProvider extends PackageServiceProvider
     public function packageRegistered(): void
     {
         $this->app->singleton(TenantAdapter::class, function (Application $app) {
-            /** @var mixed $adapterClass */
             $adapterClass = config('data-migrations.tenant_adapter');
             if (is_string($adapterClass) && class_exists($adapterClass)) {
                 /** @var TenantAdapter */
@@ -58,7 +57,7 @@ class DataMigrationServiceProvider extends PackageServiceProvider
         $this->app->singleton(ChecksumService::class);
         $this->app->singleton(LockService::class);
 
-        $this->app->singleton(MigrationRunner::class, function (Application $app) {
+        $this->app->singleton(MigrationRunner::class, function (Application $app): MigrationRunner {
             /** @var DiscoveryService $discovery */
             $discovery = $app->make(DiscoveryService::class);
             /** @var TrackingRepository $tracking */

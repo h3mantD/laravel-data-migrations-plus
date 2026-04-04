@@ -1,6 +1,8 @@
 <?php
 
-it('publishes config with expected keys', function () {
+declare(strict_types=1);
+
+it('publishes config with expected keys', function (): void {
     $config = config('data-migrations');
     expect($config)->toHaveKeys([
         'central_path', 'tenant_path', 'extra_paths',
@@ -11,7 +13,7 @@ it('publishes config with expected keys', function () {
     ]);
 });
 
-it('has sensible defaults', function () {
+it('has sensible defaults', function (): void {
     expect(config('data-migrations.table'))->toBe('data_migrations');
     expect(config('data-migrations.connection'))->toBeNull();
     expect(config('data-migrations.lock.enabled'))->toBeTrue();

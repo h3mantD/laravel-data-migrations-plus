@@ -2,13 +2,14 @@
 
 use H3mantd\DataMigrations\Services\LockService;
 
-beforeEach(function () {
+beforeEach(function (): void {
     config()->set('data-migrations.lock.enabled', true);
     config()->set('data-migrations.lock.ttl', 1800);
+
     $this->service = new LockService;
 });
 
-it('acquires and releases lock', function () {
+it('acquires and releases lock', function (): void {
     $acquired = $this->service->acquire();
     expect($acquired)->toBeTrue();
     $this->service->release();
@@ -17,7 +18,7 @@ it('acquires and releases lock', function () {
     $this->service->release();
 });
 
-it('fails to acquire lock when already held', function () {
+it('fails to acquire lock when already held', function (): void {
     $this->service->acquire();
     $secondService = new LockService;
     $acquired = $secondService->acquire();
@@ -25,7 +26,7 @@ it('fails to acquire lock when already held', function () {
     $this->service->release();
 });
 
-it('skips locking when disabled', function () {
+it('skips locking when disabled', function (): void {
     config()->set('data-migrations.lock.enabled', false);
     $service = new LockService;
     $acquired = $service->acquire();

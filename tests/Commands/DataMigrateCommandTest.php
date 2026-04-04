@@ -3,7 +3,7 @@
 use H3mantd\DataMigrations\Enums\MigrationScope;
 use H3mantd\DataMigrations\Services\TrackingRepository;
 
-beforeEach(function () {
+beforeEach(function (): void {
     $this->centralDir = sys_get_temp_dir().'/dm-cmd-test/central';
     $this->tenantDir = sys_get_temp_dir().'/dm-cmd-test/tenant';
     @mkdir($this->centralDir, 0755, true);
@@ -12,15 +12,15 @@ beforeEach(function () {
     config()->set('data-migrations.tenant_path', $this->tenantDir);
 });
 
-afterEach(function () {
-    array_map('unlink', glob($this->centralDir.'/*'));
-    array_map('unlink', glob($this->tenantDir.'/*'));
+afterEach(function (): void {
+    array_map(unlink(...), glob($this->centralDir.'/*'));
+    array_map(unlink(...), glob($this->tenantDir.'/*'));
     @rmdir($this->centralDir);
     @rmdir($this->tenantDir);
     @rmdir(dirname($this->centralDir));
 });
 
-it('runs pending central migrations', function () {
+it('runs pending central migrations', function (): void {
     $stub = <<<'PHP'
     <?php
     use H3mantd\DataMigrations\DataMigration;
@@ -39,17 +39,17 @@ it('runs pending central migrations', function () {
     expect($completed)->toContain('2026_04_01_100000_test_migration');
 });
 
-it('requires --force in production', function () {
-    app()->detectEnvironment(fn () => 'production');
+it('requires --force in production', function (): void {
+    app()->detectEnvironment(fn (): string => 'production');
     $this->artisan('data-migrate')->assertFailed();
 });
 
-it('runs in production with --force', function () {
-    app()->detectEnvironment(fn () => 'production');
+it('runs in production with --force', function (): void {
+    app()->detectEnvironment(fn (): string => 'production');
     $this->artisan('data-migrate', ['--force' => true, '--scope' => 'central'])->assertSuccessful();
 });
 
-it('supports pretend mode', function () {
+it('supports pretend mode', function (): void {
     $stub = <<<'PHP'
     <?php
     use H3mantd\DataMigrations\DataMigration;
@@ -67,13 +67,13 @@ it('supports pretend mode', function () {
     expect($completed)->toBeEmpty();
 });
 
-it('outputs json when --json is passed', function () {
+it('outputs json when --json is passed', function (): void {
     $this->artisan('data-migrate', ['--json' => true, '--scope' => 'central'])
         ->assertSuccessful()
         ->expectsOutputToContain('"successful"');
 });
 
-it('gracefully skips tenant scope when no adapter is configured', function () {
+it('gracefully skips tenant scope when no adapter is configured', function (): void {
     // Default config has tenant_adapter = null (NullTenantAdapter)
     // Running --scope=all should NOT throw — it should skip tenants silently
     $this->artisan('data-migrate', ['--scope' => 'all'])

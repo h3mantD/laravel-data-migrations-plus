@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\Cache;
 
 class LockService
 {
-    private const LOCK_KEY = 'data-migrations:running';
+    private const string LOCK_KEY = 'data-migrations:running';
 
     private ?Lock $lock = null;
 
@@ -18,6 +18,7 @@ class LockService
         if (! config('data-migrations.lock.enabled', true)) {
             return true;
         }
+
         $ttlConfig = config('data-migrations.lock.ttl', 1800);
         $ttl = is_int($ttlConfig) ? $ttlConfig : 1800;
         $this->lock = Cache::lock(self::LOCK_KEY, $ttl);

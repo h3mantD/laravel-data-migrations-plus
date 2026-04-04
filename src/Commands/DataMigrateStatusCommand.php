@@ -122,12 +122,14 @@ class DataMigrateStatusCommand extends Command
                     if (isset($discovered[$migName])) {
                         continue;
                     }
+
                     /** @var string $orphanStatus */
                     $orphanStatus = $record->status;
                     $status = MigrationStatus::from($orphanStatus);
                     if ($showFailed && $status !== MigrationStatus::Failed) {
                         continue;
                     }
+
                     $rows[] = [
                         'name' => (string) $migName,
                         'scope' => MigrationScope::Tenant->value,
@@ -142,7 +144,7 @@ class DataMigrateStatusCommand extends Command
 
         // If no tracked records exist, still show discovered migrations as pending
         if ($byTenant->isEmpty() && ! $showFailed) {
-            foreach ($discovered as $name => $migration) {
+            foreach (array_keys($discovered) as $name) {
                 $rows[] = [
                     'name' => $name,
                     'scope' => MigrationScope::Tenant->value,
@@ -179,12 +181,14 @@ class DataMigrateStatusCommand extends Command
                 if (isset($discovered[$name])) {
                     continue;
                 }
+
                 /** @var string $orphanStatus */
                 $orphanStatus = $record->status;
                 $status = MigrationStatus::from($orphanStatus);
                 if ($showFailed && $status !== MigrationStatus::Failed) {
                     continue;
                 }
+
                 $rows[] = [
                     'name' => (string) $name,
                     'scope' => $migrationScope->value,
@@ -213,7 +217,7 @@ class DataMigrateStatusCommand extends Command
         bool $showFailed,
         array &$rows,
     ): void {
-        foreach ($discovered as $name => $migration) {
+        foreach (array_keys($discovered) as $name) {
             $record = $tracked->get($name);
             /** @var string|null $recordStatus */
             $recordStatus = $record->status ?? null;
@@ -222,6 +226,7 @@ class DataMigrateStatusCommand extends Command
             if ($showPending && $status !== MigrationStatus::Pending) {
                 continue;
             }
+
             if ($showFailed && $status !== MigrationStatus::Failed) {
                 continue;
             }

@@ -33,25 +33,25 @@ class MakeDataMigrationCommand extends Command
         $type = $this->option('type');
 
         if (! in_array($scope, ['central', 'tenant'], true)) {
-            $this->error("Invalid scope: {$scope}. Valid scopes: central, tenant");
+            $this->error(sprintf('Invalid scope: %s. Valid scopes: central, tenant', $scope));
 
             return self::FAILURE;
         }
 
         if (! MigrationType::tryFrom($type)) {
-            $this->error("Invalid type: {$type}. Valid types: bootstrap, transform, backfill, reconcile, cleanup");
+            $this->error(sprintf('Invalid type: %s. Valid types: bootstrap, transform, backfill, reconcile, cleanup', $type));
 
             return self::FAILURE;
         }
 
         if (preg_match('/[^a-zA-Z0-9_]/', $name)) {
-            $this->error("Invalid name: {$name}. Name must contain only alphanumeric characters and underscores.");
+            $this->error(sprintf('Invalid name: %s. Name must contain only alphanumeric characters and underscores.', $name));
 
             return self::FAILURE;
         }
 
         $timestamp = now()->format('Y_m_d_His');
-        $filename = "{$timestamp}_{$name}.php";
+        $filename = sprintf('%s_%s.php', $timestamp, $name);
 
         $customPath = $this->option('path');
 
@@ -74,7 +74,7 @@ class MakeDataMigrationCommand extends Command
         $stub = file_get_contents(__DIR__.'/../../stubs/'.$stubFile);
 
         if ($stub === false) {
-            $this->error("Could not read stub file: {$stubFile}");
+            $this->error('Could not read stub file: '.$stubFile);
 
             return self::FAILURE;
         }
@@ -85,7 +85,7 @@ class MakeDataMigrationCommand extends Command
         file_put_contents($filePath, $stub);
 
         $relativePath = str_replace(base_path().'/', '', $filePath);
-        $this->components->info("Data migration created: {$relativePath}");
+        $this->components->info('Data migration created: '.$relativePath);
         $this->components->twoColumnDetail('Scope', $scope);
         $this->components->twoColumnDetail('Type', $type);
 

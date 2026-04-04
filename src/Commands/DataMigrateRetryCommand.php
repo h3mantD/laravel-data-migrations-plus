@@ -89,6 +89,7 @@ class DataMigrateRetryCommand extends Command
         foreach ($retried as $name) {
             $this->components->twoColumnDetail($name, '<fg=green;options=bold>RETRIED</>');
         }
+
         foreach ($failedAgain as $name) {
             $this->components->twoColumnDetail($name, '<fg=red;options=bold>FAILED AGAIN</>');
         }

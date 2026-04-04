@@ -5,7 +5,7 @@ use H3mantd\DataMigrations\DataMigrationContext;
 use H3mantd\DataMigrations\Enums\MigrationScope;
 use H3mantd\DataMigrations\Enums\MigrationType;
 
-it('has default type of bootstrap', function () {
+it('has default type of bootstrap', function (): void {
     $migration = new class extends DataMigration
     {
         public function up(DataMigrationContext $context): void {}
@@ -13,7 +13,7 @@ it('has default type of bootstrap', function () {
     expect($migration->type)->toBe(MigrationType::Bootstrap);
 });
 
-it('is transactional by default', function () {
+it('is transactional by default', function (): void {
     $migration = new class extends DataMigration
     {
         public function up(DataMigrationContext $context): void {}
@@ -21,7 +21,7 @@ it('is transactional by default', function () {
     expect($migration->transactional)->toBeTrue();
 });
 
-it('throws LogicException on down() by default', function () {
+it('throws LogicException on down() by default', function (): void {
     $migration = new class extends DataMigration
     {
         public function up(DataMigrationContext $context): void {}
@@ -35,7 +35,7 @@ it('throws LogicException on down() by default', function () {
     $migration->down($context);
 })->throws(LogicException::class, 'This data migration is irreversible.');
 
-it('validate() does nothing by default', function () {
+it('validate() does nothing by default', function (): void {
     $migration = new class extends DataMigration
     {
         public function up(DataMigrationContext $context): void {}
