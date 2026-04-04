@@ -22,7 +22,6 @@ return new class extends Migration
                 $table->timestamp('completed_at')->nullable();
                 $table->unsignedInteger('duration_ms')->nullable();
                 $table->text('error_message')->nullable();
-                $table->json('meta')->nullable();
                 $table->timestamps();
 
                 $table->unique(['migration_name', 'scope_type', 'target_key'], 'data_migrations_unique');

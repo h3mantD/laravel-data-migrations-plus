@@ -31,7 +31,6 @@ it('throws LogicException on down() by default', function () {
         connection: $connection,
         scope: MigrationScope::Central,
         targetKey: null,
-        pretend: false,
     );
     $migration->down($context);
 })->throws(LogicException::class, 'This data migration is irreversible.');
@@ -46,7 +45,6 @@ it('validate() does nothing by default', function () {
         connection: $connection,
         scope: MigrationScope::Central,
         targetKey: null,
-        pretend: false,
     );
     $migration->validate($context);
     expect(true)->toBeTrue();

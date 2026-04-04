@@ -7,6 +7,7 @@ namespace H3mantd\DataMigrations\Services;
 use H3mantd\DataMigrations\Contracts\TenantAdapter;
 use H3mantd\DataMigrations\DataMigrationContext;
 use H3mantd\DataMigrations\Enums\MigrationScope;
+use H3mantd\DataMigrations\Enums\MigrationStatus;
 use H3mantd\DataMigrations\Support\NullTenantAdapter;
 use Illuminate\Database\DatabaseManager;
 use Throwable;
@@ -105,7 +106,7 @@ class MigrationRunner
         $discovered = $this->discovery->discover($scope);
         $completed = $this->tracking->getCompleted($scope, $targetKey);
         $running = $this->tracking->getAll($scope, $targetKey)
-            ->where('status', 'running')
+            ->where('status', MigrationStatus::Running->value)
             ->pluck('migration_name');
 
         /** @var list<string> $successful */
@@ -158,7 +159,6 @@ class MigrationRunner
                     connection: $connection,
                     scope: $scope,
                     targetKey: $targetKey,
-                    pretend: false,
                 );
 
                 $migration->validate($context);

@@ -105,7 +105,6 @@ class DataMigrateRollbackCommand extends Command
                         connection: $connection,
                         scope: $migrationScope,
                         targetKey: $targetKey,
-                        pretend: false,
                     );
 
                     try {

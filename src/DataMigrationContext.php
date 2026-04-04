@@ -16,7 +16,6 @@ class DataMigrationContext
         public readonly Connection $connection,
         public readonly MigrationScope $scope,
         public readonly ?string $targetKey,
-        public readonly bool $pretend,
     ) {}
 
     public function helpers(): DataMigrationHelpers

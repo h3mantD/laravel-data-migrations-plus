@@ -511,9 +511,6 @@ public function up(DataMigrationContext $context): void
     // e.g., 'acme', 'globex', 'tenant-123'
     $context->targetKey;
 
-    // Whether this is a dry run (--pretend flag)
-    $context->pretend;
-
     // Access to built-in helper methods
     $context->helpers();
 }
@@ -1147,7 +1144,6 @@ All migration execution is recorded in the `data_migrations` table on your centr
 | `completed_at` | timestamp | When execution finished |
 | `duration_ms` | integer | Execution time in milliseconds |
 | `error_message` | text, nullable | Error details on failure |
-| `meta` | json, nullable | Extensible metadata (for future use) |
 
 Central and tenant migrations are tracked in the same table. A unique constraint on `(migration_name, scope_type, target_key)` ensures each migration is tracked independently per scope and tenant.
 

@@ -73,14 +73,6 @@ class TrackingRepository
         ]);
     }
 
-    /** @return Collection<int|string, mixed> */
-    public function getPending(MigrationScope $scope, ?string $targetKey): Collection
-    {
-        return $this->scopedQuery($scope, $targetKey)
-            ->where('status', MigrationStatus::Pending->value)
-            ->pluck('migration_name');
-    }
-
     /** @return Collection<int, stdClass> */
     public function getFailed(MigrationScope $scope, ?string $targetKey): Collection
     {
@@ -104,15 +96,6 @@ class TrackingRepository
         return is_numeric($max) ? ((int) $max) + 1 : 1;
     }
 
-    public function getChecksum(string $name, MigrationScope $scope, ?string $targetKey): ?string
-    {
-        $value = $this->scopedQuery($scope, $targetKey)
-            ->where('migration_name', $name)
-            ->value('checksum');
-
-        return is_string($value) ? $value : null;
-    }
-
     /** @return Collection<int, stdClass> */
     public function getAll(MigrationScope $scope, ?string $targetKey): Collection
     {
@@ -126,16 +109,6 @@ class TrackingRepository
             ->where('scope_type', $scope->value)
             ->orderBy('id')
             ->get();
-    }
-
-    /** @return Collection<int|string, mixed> */
-    public function getDistinctTargetKeys(MigrationScope $scope): Collection
-    {
-        return $this->connection()->table($this->table())
-            ->where('scope_type', $scope->value)
-            ->whereNotNull('target_key')
-            ->distinct()
-            ->pluck('target_key');
     }
 
     /** @return Collection<int, stdClass> */

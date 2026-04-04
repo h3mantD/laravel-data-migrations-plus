@@ -11,12 +11,10 @@ it('exposes all properties', function () {
         connection: $connection,
         scope: MigrationScope::Central,
         targetKey: null,
-        pretend: false,
     );
     expect($context->connection)->toBeInstanceOf(Connection::class);
     expect($context->scope)->toBe(MigrationScope::Central);
     expect($context->targetKey)->toBeNull();
-    expect($context->pretend)->toBeFalse();
 });
 
 it('exposes tenant properties', function () {
@@ -25,11 +23,9 @@ it('exposes tenant properties', function () {
         connection: $connection,
         scope: MigrationScope::Tenant,
         targetKey: 'acme-1',
-        pretend: true,
     );
     expect($context->scope)->toBe(MigrationScope::Tenant);
     expect($context->targetKey)->toBe('acme-1');
-    expect($context->pretend)->toBeTrue();
 });
 
 it('returns helpers instance', function () {
@@ -38,7 +34,6 @@ it('returns helpers instance', function () {
         connection: $connection,
         scope: MigrationScope::Central,
         targetKey: null,
-        pretend: false,
     );
     expect($context->helpers())->toBeInstanceOf(DataMigrationHelpers::class);
 });
