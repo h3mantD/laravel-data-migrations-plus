@@ -179,7 +179,13 @@ return new class extends DataMigration
 };
 ```
 
-Data migrations have three public properties that control their behavior: `$scope`, `$type`, and `$transactional`. Each is described in detail below.
+Data migrations have three public properties. `$scope` and `$transactional` control execution behavior. `$type` is informational metadata. Each is described in detail below.
+
+| Property | Type | Default | Affects Execution | Description |
+|---|---|---|---|---|
+| `$scope` | `MigrationScope` | `Central` | **Yes** | Determines whether the migration runs centrally or per-tenant |
+| `$type` | `MigrationType` | `Bootstrap` | No | Informational label visible in `data-migrate:show` |
+| `$transactional` | `bool` | `true` | **Yes** | Whether `up()` is wrapped in a database transaction |
 
 ### Migration Scope
 
@@ -231,7 +237,11 @@ Each tenant's execution is tracked independently. If a migration succeeds for te
 
 ### Migration Types
 
-The `$type` property categorizes the **intent** of a migration. This is metadata that helps your team understand what a migration does at a glance, and makes the `data-migrate:show` output more informative.
+The `$type` property categorizes the **intent** of a migration. It is purely informational — it does not affect how the migration is executed, ordered, or tracked. Think of it as structured documentation: it helps your team understand what a migration does at a glance, and shows up in `data-migrate:show` output.
+
+If you don't set `$type`, it defaults to `MigrationType::Bootstrap`. Setting the wrong type has no functional impact — but getting it right makes your migration history more readable.
+
+There are five migration types:
 
 #### `MigrationType::Bootstrap`
 
