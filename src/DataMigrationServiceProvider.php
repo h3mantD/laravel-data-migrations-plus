@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace H3mantd\DataMigrations;
 
 use H3mantd\DataMigrations\Commands\DataMigrateCommand;
+use H3mantd\DataMigrations\Commands\DataMigrateRetryCommand;
+use H3mantd\DataMigrations\Commands\DataMigrateStatusCommand;
+use H3mantd\DataMigrations\Commands\DataMigrateVerifyCommand;
 use H3mantd\DataMigrations\Commands\MakeDataMigrationCommand;
 use H3mantd\DataMigrations\Contracts\TenantAdapter;
 use H3mantd\DataMigrations\Services\ChecksumService;
@@ -28,7 +31,10 @@ class DataMigrationServiceProvider extends PackageServiceProvider
             ->hasMigration('create_data_migrations_table')
             ->runsMigrations()
             ->hasCommand(MakeDataMigrationCommand::class)
-            ->hasCommand(DataMigrateCommand::class);
+            ->hasCommand(DataMigrateCommand::class)
+            ->hasCommand(DataMigrateStatusCommand::class)
+            ->hasCommand(DataMigrateVerifyCommand::class)
+            ->hasCommand(DataMigrateRetryCommand::class);
     }
 
     public function packageRegistered(): void
