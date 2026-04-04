@@ -63,7 +63,7 @@ Laravel's seeders are not a great fit for these scenarios. Seeders are designed 
 
 - PHP 8.4+
 - Laravel 11, 12, or 13
-- Any database supported by Laravel (MySQL, PostgreSQL, SQLite, SQL Server)
+- Any database supported by Laravel (MySQL, PostgreSQL, SQLite, SQL Server, Oracle via [yajra/laravel-oci8](https://github.com/yajra/laravel-oci8))
 
 ## Installation
 
@@ -1155,9 +1155,11 @@ Central and tenant migrations are tracked in the same table. A unique constraint
 
 ## Database Compatibility
 
-The package works with **all databases supported by Laravel**: MySQL, PostgreSQL, SQLite, and SQL Server. All queries use Laravel's Query Builder — no raw SQL, no driver-specific syntax.
+The package works with **all databases supported by Laravel**: MySQL, PostgreSQL, SQLite, and SQL Server. It also works with **Oracle** via [yajra/laravel-oci8](https://github.com/yajra/laravel-oci8) or any other community database driver that integrates with Laravel's database layer.
 
-In multi-tenant setups, the central database and tenant databases can be on **different database engines**. For example, your central database might be MySQL while tenant databases are PostgreSQL. The package resolves the correct connection at runtime through the `TenantAdapter`.
+All queries use Laravel's Query Builder — no raw SQL, no driver-specific syntax. The package never assumes a specific database engine.
+
+In multi-tenant setups, the central database and tenant databases can be on **different database engines**. For example, your central database might be MySQL while some tenants use PostgreSQL and others use Oracle. The package resolves the correct connection at runtime through the `TenantAdapter`.
 
 ## Safe Patterns & Anti-Patterns
 

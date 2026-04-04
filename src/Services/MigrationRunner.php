@@ -148,9 +148,11 @@ class MigrationRunner
             if ($specificName !== null && $name !== $specificName) {
                 continue;
             }
+
             if ($completed->contains($name)) {
                 continue;
             }
+
             if ($running->contains($name)) {
                 continue;
             }
