@@ -25,5 +25,8 @@ class TestCase extends Orchestra
             'database' => ':memory:',
             'prefix' => '',
         ]);
+
+        $migration = include __DIR__.'/../database/migrations/create_data_migrations_table.php';
+        $migration->up();
     }
 }
