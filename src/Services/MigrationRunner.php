@@ -7,6 +7,7 @@ namespace H3mantd\DataMigrations\Services;
 use H3mantd\DataMigrations\Contracts\TenantAdapter;
 use H3mantd\DataMigrations\DataMigrationContext;
 use H3mantd\DataMigrations\Enums\MigrationScope;
+use H3mantd\DataMigrations\Support\NullTenantAdapter;
 use Illuminate\Database\DatabaseManager;
 use Throwable;
 
@@ -21,6 +22,19 @@ class MigrationRunner
         private readonly DatabaseManager $db,
     ) {}
 
+    /** @var (\Closure(string): void)|null */
+    private ?\Closure $onTenantStart = null;
+
+    /**
+     * @param  (\Closure(string): void)|null  $onTenantStart
+     */
+    public function onTenantStart(?\Closure $onTenantStart): self
+    {
+        $this->onTenantStart = $onTenantStart;
+
+        return $this;
+    }
+
     public function run(
         MigrationScope $scope,
         ?string $targetKey,
@@ -33,6 +47,10 @@ class MigrationRunner
         }
 
         try {
+            if ($scope === MigrationScope::Tenant && $this->tenantAdapter instanceof NullTenantAdapter) {
+                return new RunResult;
+            }
+
             if ($scope === MigrationScope::Tenant && $targetKey === null) {
                 return $this->runAllTenants($pretend, $continueOnFailure, $specificName);
             }
@@ -55,6 +73,10 @@ class MigrationRunner
         foreach ($this->tenantAdapter->tenants() as $tenant) {
             $this->tenantAdapter->enter($tenant);
             $key = $this->tenantAdapter->tenantKey($tenant);
+
+            if ($this->onTenantStart !== null) {
+                ($this->onTenantStart)($key);
+            }
 
             try {
                 $result = $this->runScope(MigrationScope::Tenant, $key, $pretend, $continueOnFailure, $specificName);

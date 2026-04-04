@@ -45,6 +45,12 @@ class DataMigrateCommand extends Command
             default => [MigrationScope::Central, MigrationScope::Tenant],
         };
 
+        if (! $json) {
+            $runner->onTenantStart(function (string $key): void {
+                $this->components->twoColumnDetail("Tenant: {$key}", '<fg=cyan>RUNNING</>');
+            });
+        }
+
         foreach ($scopes as $migrationScope) {
             $targetKey = $migrationScope === MigrationScope::Tenant ? $tenantKey : null;
 

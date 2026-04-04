@@ -72,3 +72,10 @@ it('outputs json when --json is passed', function () {
         ->assertSuccessful()
         ->expectsOutputToContain('"successful"');
 });
+
+it('gracefully skips tenant scope when no adapter is configured', function () {
+    // Default config has tenant_adapter = null (NullTenantAdapter)
+    // Running --scope=all should NOT throw — it should skip tenants silently
+    $this->artisan('data-migrate', ['--scope' => 'all'])
+        ->assertSuccessful();
+});

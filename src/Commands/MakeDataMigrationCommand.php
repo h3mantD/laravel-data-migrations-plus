@@ -84,7 +84,10 @@ class MakeDataMigrationCommand extends Command
         $filePath = $path.'/'.$filename;
         file_put_contents($filePath, $stub);
 
-        $this->components->info("Data migration [{$filePath}] created successfully.");
+        $relativePath = str_replace(base_path().'/', '', $filePath);
+        $this->components->info("Data migration created: {$relativePath}");
+        $this->components->twoColumnDetail('Scope', $scope);
+        $this->components->twoColumnDetail('Type', $type);
 
         return self::SUCCESS;
     }

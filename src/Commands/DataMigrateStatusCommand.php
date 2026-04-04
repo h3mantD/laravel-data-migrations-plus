@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace H3mantd\DataMigrations\Commands;
 
+use H3mantd\DataMigrations\DataMigration;
 use H3mantd\DataMigrations\Enums\MigrationScope;
 use H3mantd\DataMigrations\Enums\MigrationStatus;
 use H3mantd\DataMigrations\Services\DiscoveryService;
 use H3mantd\DataMigrations\Services\TrackingRepository;
 use Illuminate\Console\Command;
+use Illuminate\Support\Collection;
 
 class DataMigrateStatusCommand extends Command
 {
@@ -37,61 +39,15 @@ class DataMigrateStatusCommand extends Command
             default => [MigrationScope::Central, MigrationScope::Tenant],
         };
 
-        /** @var list<array{name: string, scope: string, target_key: string|null, status: string, batch: int|null, ran_at: string|null}> $rows */
+        /** @var list<array<string, mixed>> $rows */
         $rows = [];
 
         foreach ($scopes as $migrationScope) {
-            $targetKey = $migrationScope === MigrationScope::Tenant ? $tenantKey : null;
-            $discovered = $discovery->discover($migrationScope);
-            // For tenant scope without --tenant, show ALL tenant records
-            $tracked = ($migrationScope === MigrationScope::Tenant && $targetKey === null)
-                ? $tracking->getAllByScope($migrationScope)->keyBy('migration_name')
-                : $tracking->getAll($migrationScope, $targetKey)->keyBy('migration_name');
-
-            foreach ($discovered as $name => $migration) {
-                $record = $tracked->get($name);
-                /** @var string|null $recordStatus */
-                $recordStatus = $record->status ?? null;
-                $status = $recordStatus !== null ? MigrationStatus::from($recordStatus) : MigrationStatus::Pending;
-
-                if ($showPending && $status !== MigrationStatus::Pending) {
-                    continue;
-                }
-                if ($showFailed && $status !== MigrationStatus::Failed) {
-                    continue;
-                }
-
-                $rows[] = [
-                    'name' => $name,
-                    'scope' => $migrationScope->value,
-                    'target_key' => $targetKey,
-                    'status' => $status->value,
-                    'batch' => $record->batch ?? null,
-                    'ran_at' => $record->completed_at ?? null,
-                ];
-            }
-
-            // Show tracked-but-missing-on-disk (orphaned)
-            if (! $showPending) {
-                foreach ($tracked as $name => $record) {
-                    if (isset($discovered[$name])) {
-                        continue;
-                    }
-                    /** @var string $orphanStatus */
-                    $orphanStatus = $record->status;
-                    $status = MigrationStatus::from($orphanStatus);
-                    if ($showFailed && $status !== MigrationStatus::Failed) {
-                        continue;
-                    }
-                    $rows[] = [
-                        'name' => (string) $name,
-                        'scope' => $migrationScope->value,
-                        'target_key' => $targetKey,
-                        'status' => $status->value,
-                        'batch' => $record->batch,
-                        'ran_at' => $record->completed_at,
-                    ];
-                }
+            if ($migrationScope === MigrationScope::Tenant && $tenantKey === null) {
+                $this->collectTenantStatusAll($discovery, $tracking, $showPending, $showFailed, $rows);
+            } else {
+                $targetKey = $migrationScope === MigrationScope::Tenant ? $tenantKey : null;
+                $this->collectScopedStatus($discovery, $tracking, $migrationScope, $targetKey, $showPending, $showFailed, $rows);
             }
         }
 
@@ -110,23 +66,174 @@ class DataMigrateStatusCommand extends Command
         $this->table(
             ['Name', 'Scope', 'Target', 'Status', 'Batch', 'Ran At'],
             array_map(function (array $row): array {
-                /** @var array{name: string, scope: string, target_key: string|null, status: string, batch: int|null, ran_at: string|null} $row */
+                $name = is_string($row['name'] ?? null) ? $row['name'] : '-';
+                $scope = is_string($row['scope'] ?? null) ? $row['scope'] : '-';
+                $target = is_string($row['target_key'] ?? null) ? $row['target_key'] : '-';
+                $status = is_string($row['status'] ?? null) ? $row['status'] : '-';
+                $batch = is_scalar($row['batch'] ?? null) ? (string) $row['batch'] : '-';
+                $ranAt = is_string($row['ran_at'] ?? null) ? $row['ran_at'] : '-';
+
                 return [
-                    $row['name'],
-                    $row['scope'],
-                    $row['target_key'] ?? '-',
-                    match ($row['status']) {
-                        'completed' => '<fg=green>'.$row['status'].'</>',
-                        'failed' => '<fg=red>'.$row['status'].'</>',
-                        'running' => '<fg=yellow>'.$row['status'].'</>',
-                        default => $row['status'],
+                    $name,
+                    $scope,
+                    $target,
+                    match ($status) {
+                        'completed' => '<fg=green>'.$status.'</>',
+                        'failed' => '<fg=red>'.$status.'</>',
+                        'running' => '<fg=yellow>'.$status.'</>',
+                        default => $status,
                     },
-                    is_scalar($row['batch']) ? (string) $row['batch'] : '-',
-                    $row['ran_at'] ?? '-',
+                    $batch,
+                    $ranAt,
                 ];
             }, $rows),
         );
 
         return self::SUCCESS;
+    }
+
+    /**
+     * Collect status for all tenants when no specific --tenant is given.
+     *
+     * @param  list<array<string, mixed>>  $rows
+     */
+    private function collectTenantStatusAll(
+        DiscoveryService $discovery,
+        TrackingRepository $tracking,
+        bool $showPending,
+        bool $showFailed,
+        array &$rows,
+    ): void {
+        $discovered = $discovery->discover(MigrationScope::Tenant);
+        $allTracked = $tracking->getAllByScope(MigrationScope::Tenant);
+
+        // Group tracked records by target_key
+        $byTenant = $allTracked->groupBy(fn (object $r): string => is_string($r->target_key) ? $r->target_key : '');
+
+        // Show per-tenant status for each tracked tenant
+        foreach ($byTenant as $key => $records) {
+            $tenantKey = (string) $key;
+            $trackedByName = $records->keyBy('migration_name');
+            $this->buildRows($discovered, $trackedByName, MigrationScope::Tenant, $tenantKey, $showPending, $showFailed, $rows);
+
+            // Show tracked-but-missing-on-disk (orphaned) per tenant
+            if (! $showPending) {
+                foreach ($trackedByName as $migName => $record) {
+                    if (isset($discovered[$migName])) {
+                        continue;
+                    }
+                    /** @var string $orphanStatus */
+                    $orphanStatus = $record->status;
+                    $status = MigrationStatus::from($orphanStatus);
+                    if ($showFailed && $status !== MigrationStatus::Failed) {
+                        continue;
+                    }
+                    $rows[] = [
+                        'name' => (string) $migName,
+                        'scope' => MigrationScope::Tenant->value,
+                        'target_key' => $tenantKey,
+                        'status' => $status->value,
+                        'batch' => $record->batch,
+                        'ran_at' => $record->completed_at,
+                    ];
+                }
+            }
+        }
+
+        // If no tracked records exist, still show discovered migrations as pending
+        if ($byTenant->isEmpty() && ! $showFailed) {
+            foreach ($discovered as $name => $migration) {
+                $rows[] = [
+                    'name' => $name,
+                    'scope' => MigrationScope::Tenant->value,
+                    'target_key' => null,
+                    'status' => MigrationStatus::Pending->value,
+                    'batch' => null,
+                    'ran_at' => null,
+                ];
+            }
+        }
+    }
+
+    /**
+     * Collect status for a specific scope and target_key.
+     *
+     * @param  list<array<string, mixed>>  $rows
+     */
+    private function collectScopedStatus(
+        DiscoveryService $discovery,
+        TrackingRepository $tracking,
+        MigrationScope $migrationScope,
+        ?string $targetKey,
+        bool $showPending,
+        bool $showFailed,
+        array &$rows,
+    ): void {
+        $discovered = $discovery->discover($migrationScope);
+        $tracked = $tracking->getAll($migrationScope, $targetKey)->keyBy('migration_name');
+        $this->buildRows($discovered, $tracked, $migrationScope, $targetKey, $showPending, $showFailed, $rows);
+
+        // Show tracked-but-missing-on-disk (orphaned)
+        if (! $showPending) {
+            foreach ($tracked as $name => $record) {
+                if (isset($discovered[$name])) {
+                    continue;
+                }
+                /** @var string $orphanStatus */
+                $orphanStatus = $record->status;
+                $status = MigrationStatus::from($orphanStatus);
+                if ($showFailed && $status !== MigrationStatus::Failed) {
+                    continue;
+                }
+                $rows[] = [
+                    'name' => (string) $name,
+                    'scope' => $migrationScope->value,
+                    'target_key' => $targetKey,
+                    'status' => $status->value,
+                    'batch' => $record->batch,
+                    'ran_at' => $record->completed_at,
+                ];
+            }
+        }
+    }
+
+    /**
+     * Build rows from discovered migrations + tracked records.
+     *
+     * @param  array<string, DataMigration>  $discovered
+     * @param  Collection<int|string, \stdClass>  $tracked
+     * @param  list<array<string, mixed>>  $rows
+     */
+    private function buildRows(
+        array $discovered,
+        Collection $tracked,
+        MigrationScope $scope,
+        ?string $targetKey,
+        bool $showPending,
+        bool $showFailed,
+        array &$rows,
+    ): void {
+        foreach ($discovered as $name => $migration) {
+            $record = $tracked->get($name);
+            /** @var string|null $recordStatus */
+            $recordStatus = $record->status ?? null;
+            $status = $recordStatus !== null ? MigrationStatus::from($recordStatus) : MigrationStatus::Pending;
+
+            if ($showPending && $status !== MigrationStatus::Pending) {
+                continue;
+            }
+            if ($showFailed && $status !== MigrationStatus::Failed) {
+                continue;
+            }
+
+            $rows[] = [
+                'name' => $name,
+                'scope' => $scope->value,
+                'target_key' => $targetKey,
+                'status' => $status->value,
+                'batch' => $record->batch ?? null,
+                'ran_at' => $record->completed_at ?? null,
+            ];
+        }
     }
 }
