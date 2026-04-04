@@ -56,10 +56,37 @@ class MigrationRunner
                 return $this->runAllTenants($pretend, $continueOnFailure, $specificName);
             }
 
+            if ($scope === MigrationScope::Tenant) {
+                return $this->runSpecificTenant($targetKey, $pretend, $continueOnFailure, $specificName);
+            }
+
             return $this->runScope($scope, $targetKey, $pretend, $continueOnFailure, $specificName);
         } finally {
             $this->lock->release();
         }
+    }
+
+    private function runSpecificTenant(string $targetKey, bool $pretend, bool $continueOnFailure, ?string $specificName): RunResult
+    {
+        foreach ($this->tenantAdapter->tenants() as $tenant) {
+            if ($this->tenantAdapter->tenantKey($tenant) !== $targetKey) {
+                continue;
+            }
+
+            $this->tenantAdapter->enter($tenant);
+
+            if ($this->onTenantStart !== null) {
+                ($this->onTenantStart)($targetKey);
+            }
+
+            try {
+                return $this->runScope(MigrationScope::Tenant, $targetKey, $pretend, $continueOnFailure, $specificName);
+            } finally {
+                $this->tenantAdapter->leave();
+            }
+        }
+
+        return new RunResult;
     }
 
     private function runAllTenants(bool $pretend, bool $continueOnFailure, ?string $specificName): RunResult

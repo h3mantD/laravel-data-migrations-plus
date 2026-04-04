@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace H3mantd\DataMigrations\Commands;
 
+use H3mantd\DataMigrations\Contracts\TenantAdapter;
 use H3mantd\DataMigrations\DataMigrationContext;
 use H3mantd\DataMigrations\Enums\MigrationScope;
 use H3mantd\DataMigrations\Services\DiscoveryService;
 use H3mantd\DataMigrations\Services\LockService;
 use H3mantd\DataMigrations\Services\TrackingRepository;
+use H3mantd\DataMigrations\Support\NullTenantAdapter;
 use Illuminate\Console\Command;
 use Illuminate\Database\DatabaseManager;
 use Throwable;
@@ -29,6 +31,7 @@ class DataMigrateRollbackCommand extends Command
         DiscoveryService $discovery,
         LockService $lock,
         DatabaseManager $db,
+        TenantAdapter $tenantAdapter,
     ): int {
         if (app()->isProduction() && ! $this->option('force')) {
             $this->components->error('Use --force to run in production.');
@@ -43,14 +46,18 @@ class DataMigrateRollbackCommand extends Command
         }
 
         try {
-            return $this->rollback($tracking, $discovery, $db);
+            return $this->rollback($tracking, $discovery, $db, $tenantAdapter);
         } finally {
             $lock->release();
         }
     }
 
-    private function rollback(TrackingRepository $tracking, DiscoveryService $discovery, DatabaseManager $db): int
-    {
+    private function rollback(
+        TrackingRepository $tracking,
+        DiscoveryService $discovery,
+        DatabaseManager $db,
+        TenantAdapter $tenantAdapter,
+    ): int {
         $steps = (int) $this->option('step');
         /** @var string $scope */
         $scope = $this->option('scope');
@@ -70,6 +77,10 @@ class DataMigrateRollbackCommand extends Command
         $errors = [];
 
         foreach ($scopes as $migrationScope) {
+            if ($migrationScope === MigrationScope::Tenant && $tenantAdapter instanceof NullTenantAdapter) {
+                continue;
+            }
+
             $targetKey = $migrationScope === MigrationScope::Tenant ? $tenantKey : null;
             $lastBatch = $tracking->getLastBatch($migrationScope, $targetKey);
 
@@ -80,47 +91,70 @@ class DataMigrateRollbackCommand extends Command
             $startBatch = max(1, $lastBatch - $steps + 1);
             $discovered = $discovery->discover($migrationScope);
 
-            for ($batch = $lastBatch; $batch >= $startBatch; $batch--) {
-                $records = $tracking->getByBatch($batch, $migrationScope, $targetKey);
+            // For tenant scope, find and enter the tenant context
+            $enteredTenant = false;
+            if ($migrationScope === MigrationScope::Tenant && $targetKey !== null) {
+                foreach ($tenantAdapter->tenants() as $tenant) {
+                    if ($tenantAdapter->tenantKey($tenant) === $targetKey) {
+                        $tenantAdapter->enter($tenant);
+                        $enteredTenant = true;
 
-                foreach ($records as $record) {
-                    /** @var string $migrationName */
-                    $migrationName = $record->migration_name;
-                    /** @var string|null $connectionName */
-                    $connectionName = $record->connection_name;
-
-                    $migration = $discovered[$migrationName] ?? null;
-
-                    if ($migration === null) {
-                        $errors[] = "File not found for: {$migrationName}";
-
-                        continue;
+                        break;
                     }
+                }
 
-                    $connection = $db->connection(
-                        $migrationScope === MigrationScope::Tenant ? $connectionName : null
-                    );
+                if (! $enteredTenant) {
+                    $errors[] = "Tenant not found: {$targetKey}";
 
-                    $context = new DataMigrationContext(
-                        connection: $connection,
-                        scope: $migrationScope,
-                        targetKey: $targetKey,
-                    );
+                    continue;
+                }
+            }
 
-                    try {
-                        if ($migration->transactional) {
-                            $connection->transaction(fn () => $migration->down($context));
-                        } else {
-                            $migration->down($context);
+            try {
+                for ($batch = $lastBatch; $batch >= $startBatch; $batch--) {
+                    $records = $tracking->getByBatch($batch, $migrationScope, $targetKey);
+
+                    foreach ($records as $record) {
+                        /** @var string $migrationName */
+                        $migrationName = $record->migration_name;
+
+                        $migration = $discovered[$migrationName] ?? null;
+
+                        if ($migration === null) {
+                            $errors[] = "File not found for: {$migrationName}";
+
+                            continue;
                         }
 
-                        /** @var int $recordId */
-                        $recordId = $record->id;
-                        $tracking->markRolledBack($recordId);
-                        $rolledBack[] = $migrationName;
-                    } catch (Throwable $e) {
-                        $errors[] = "{$migrationName}: {$e->getMessage()}";
+                        $connection = $db->connection(
+                            $migrationScope === MigrationScope::Tenant ? $tenantAdapter->connectionName() : null
+                        );
+
+                        $context = new DataMigrationContext(
+                            connection: $connection,
+                            scope: $migrationScope,
+                            targetKey: $targetKey,
+                        );
+
+                        try {
+                            if ($migration->transactional) {
+                                $connection->transaction(fn () => $migration->down($context));
+                            } else {
+                                $migration->down($context);
+                            }
+
+                            /** @var int $recordId */
+                            $recordId = $record->id;
+                            $tracking->markRolledBack($recordId);
+                            $rolledBack[] = $migrationName;
+                        } catch (Throwable $e) {
+                            $errors[] = "{$migrationName}: {$e->getMessage()}";
+                        }
                     }
+                }
+            } finally {
+                if ($enteredTenant) {
+                    $tenantAdapter->leave();
                 }
             }
         }
