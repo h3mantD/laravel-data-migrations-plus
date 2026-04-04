@@ -1,0 +1,24 @@
+<?php
+
+declare(strict_types=1);
+
+use H3mantd\DataMigrations\DataMigration;
+use H3mantd\DataMigrations\DataMigrationContext;
+use H3mantd\DataMigrations\Enums\MigrationScope;
+use H3mantd\DataMigrations\Enums\MigrationType;
+
+return new class extends DataMigration
+{
+    public MigrationScope $scope = MigrationScope::Tenant;
+
+    public MigrationType $type = MigrationType::{{ type }};
+
+    public bool $transactional = true;
+
+    public function up(DataMigrationContext $context): void
+    {
+        // $context->targetKey contains the tenant identifier
+        // Use $context->connection for Query Builder access (on the tenant's connection)
+        // Use $context->helpers() for ensureRecord(), updateWhereNull(), normalizeColumn()
+    }
+};

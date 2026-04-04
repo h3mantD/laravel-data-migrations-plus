@@ -4,6 +4,17 @@ declare(strict_types=1);
 
 namespace H3mantd\DataMigrations;
 
+use H3mantd\DataMigrations\Commands\DataMigrateCommand;
+use H3mantd\DataMigrations\Commands\MakeDataMigrationCommand;
+use H3mantd\DataMigrations\Contracts\TenantAdapter;
+use H3mantd\DataMigrations\Services\ChecksumService;
+use H3mantd\DataMigrations\Services\DiscoveryService;
+use H3mantd\DataMigrations\Services\LockService;
+use H3mantd\DataMigrations\Services\MigrationRunner;
+use H3mantd\DataMigrations\Services\TrackingRepository;
+use H3mantd\DataMigrations\Support\NullTenantAdapter;
+use Illuminate\Contracts\Foundation\Application;
+use Illuminate\Database\DatabaseManager;
 use Spatie\LaravelPackageTools\Package;
 use Spatie\LaravelPackageTools\PackageServiceProvider;
 
@@ -15,6 +26,51 @@ class DataMigrationServiceProvider extends PackageServiceProvider
             ->name('data-migrations')
             ->hasConfigFile()
             ->hasMigration('create_data_migrations_table')
-            ->runsMigrations();
+            ->runsMigrations()
+            ->hasCommand(MakeDataMigrationCommand::class)
+            ->hasCommand(DataMigrateCommand::class);
+    }
+
+    public function packageRegistered(): void
+    {
+        $this->app->singleton(TenantAdapter::class, function (Application $app) {
+            /** @var mixed $adapterClass */
+            $adapterClass = config('data-migrations.tenant_adapter');
+            if (is_string($adapterClass) && class_exists($adapterClass)) {
+                /** @var TenantAdapter */
+                return $app->make($adapterClass);
+            }
+
+            return new NullTenantAdapter;
+        });
+
+        $this->app->singleton(TrackingRepository::class);
+        $this->app->singleton(DiscoveryService::class);
+        $this->app->singleton(ChecksumService::class);
+        $this->app->singleton(LockService::class);
+
+        $this->app->singleton(MigrationRunner::class, function (Application $app) {
+            /** @var DiscoveryService $discovery */
+            $discovery = $app->make(DiscoveryService::class);
+            /** @var TrackingRepository $tracking */
+            $tracking = $app->make(TrackingRepository::class);
+            /** @var ChecksumService $checksum */
+            $checksum = $app->make(ChecksumService::class);
+            /** @var LockService $lock */
+            $lock = $app->make(LockService::class);
+            /** @var TenantAdapter $tenantAdapter */
+            $tenantAdapter = $app->make(TenantAdapter::class);
+            /** @var DatabaseManager $db */
+            $db = $app->make('db');
+
+            return new MigrationRunner(
+                discovery: $discovery,
+                tracking: $tracking,
+                checksum: $checksum,
+                lock: $lock,
+                tenantAdapter: $tenantAdapter,
+                db: $db,
+            );
+        });
     }
 }
