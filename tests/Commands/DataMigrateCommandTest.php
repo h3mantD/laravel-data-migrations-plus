@@ -79,3 +79,45 @@ it('gracefully skips tenant scope when no adapter is configured', function (): v
     $this->artisan('data-migrate', ['--scope' => 'all'])
         ->assertSuccessful();
 });
+
+it('rejects invalid scope', function (): void {
+    $this->artisan('data-migrate', ['--scope' => 'bogus'])
+        ->assertFailed();
+});
+
+it('fails explicit tenant scope when no adapter is configured', function (): void {
+    $this->artisan('data-migrate', ['--scope' => 'tenant'])
+        ->assertFailed();
+});
+
+it('fails tenant option when no adapter is configured', function (): void {
+    $this->artisan('data-migrate', ['--tenant' => 'acme-1'])
+        ->assertFailed();
+});
+
+it('fails when a specific migration name is not discovered', function (): void {
+    $this->artisan('data-migrate', ['--scope' => 'central', '--name' => '2026_04_01_100000_missing'])
+        ->assertFailed();
+});
+
+it('does not rerun failed migrations during a normal run', function (): void {
+    $stub = <<<'PHP'
+    <?php
+    use H3mantd\DataMigrations\DataMigration;
+    use H3mantd\DataMigrations\DataMigrationContext;
+    return new class extends DataMigration {
+        public bool $transactional = false;
+        public function up(DataMigrationContext $context): void {}
+    };
+    PHP;
+    file_put_contents($this->centralDir.'/2026_04_01_100000_was_broken.php', $stub);
+
+    $repo = app(TrackingRepository::class);
+    $id = $repo->recordStart('2026_04_01_100000_was_broken', MigrationScope::Central, null, 'testing', 1, null);
+    $repo->recordFailure($id, 'original error', 10);
+
+    $this->artisan('data-migrate', ['--scope' => 'central'])->assertSuccessful();
+
+    expect($repo->getFailed(MigrationScope::Central, null))->toHaveCount(1);
+    expect($repo->getAll(MigrationScope::Central, null))->toHaveCount(1);
+});

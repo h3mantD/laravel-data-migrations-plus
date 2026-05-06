@@ -90,3 +90,8 @@ it('shows pending migrations with --pending filter', function (): void {
         ->assertSuccessful()
         ->expectsOutputToContain('2026_04_02_100000_actual_pending');
 });
+
+it('rejects invalid scope', function (): void {
+    $this->artisan('data-migrate:status', ['--scope' => 'bogus'])
+        ->assertFailed();
+});

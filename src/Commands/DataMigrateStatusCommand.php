@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace H3mantd\DataMigrations\Commands;
 
+use H3mantd\DataMigrations\Commands\Concerns\ParsesMigrationScopes;
 use H3mantd\DataMigrations\DataMigration;
 use H3mantd\DataMigrations\Enums\MigrationScope;
 use H3mantd\DataMigrations\Enums\MigrationStatus;
@@ -14,6 +15,8 @@ use Illuminate\Support\Collection;
 
 class DataMigrateStatusCommand extends Command
 {
+    use ParsesMigrationScopes;
+
     public $signature = 'data-migrate:status
         {--scope=all : Scope to show (central, tenant, or all)}
         {--tenant= : Filter by tenant}
@@ -33,11 +36,16 @@ class DataMigrateStatusCommand extends Command
         $showFailed = (bool) $this->option('failed');
         $json = (bool) $this->option('json');
 
-        $scopes = match ($scope) {
-            'central' => [MigrationScope::Central],
-            'tenant' => [MigrationScope::Tenant],
-            default => [MigrationScope::Central, MigrationScope::Tenant],
-        };
+        $scopes = $this->parseMigrationScopes($scope);
+        if ($scopes === null) {
+            if ($json) {
+                $this->line((string) json_encode(['error' => $this->invalidScopeMessage($scope)], JSON_PRETTY_PRINT));
+            } else {
+                $this->components->error($this->invalidScopeMessage($scope));
+            }
+
+            return self::FAILURE;
+        }
 
         /** @var list<array<string, mixed>> $rows */
         $rows = [];

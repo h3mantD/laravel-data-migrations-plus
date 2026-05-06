@@ -4,13 +4,19 @@ declare(strict_types=1);
 
 namespace H3mantd\DataMigrations\Commands;
 
+use H3mantd\DataMigrations\Commands\Concerns\ParsesMigrationScopes;
+use H3mantd\DataMigrations\Contracts\TenantAdapter;
 use H3mantd\DataMigrations\Enums\MigrationScope;
+use H3mantd\DataMigrations\Services\DiscoveryService;
 use H3mantd\DataMigrations\Services\MigrationRunner;
 use H3mantd\DataMigrations\Services\RunResult;
+use H3mantd\DataMigrations\Support\NullTenantAdapter;
 use Illuminate\Console\Command;
 
 class DataMigrateCommand extends Command
 {
+    use ParsesMigrationScopes;
+
     public $signature = 'data-migrate
         {--scope=all : Scope to run (central, tenant, or all)}
         {--tenant= : Run for a specific tenant only}
@@ -22,7 +28,7 @@ class DataMigrateCommand extends Command
 
     public $description = 'Run pending data migrations';
 
-    public function handle(MigrationRunner $runner): int
+    public function handle(MigrationRunner $runner, TenantAdapter $tenantAdapter, DiscoveryService $discovery): int
     {
         if (app()->isProduction() && ! $this->option('force')) {
             $this->components->error('Use --force to run in production.');
@@ -30,20 +36,41 @@ class DataMigrateCommand extends Command
             return self::FAILURE;
         }
 
+        /** @var string $scope */
         $scope = $this->option('scope');
         $pretend = (bool) $this->option('pretend');
         $continueOnFailure = (bool) $this->option('continue-on-failure');
+        /** @var string|null $specificName */
         $specificName = $this->option('name');
+        /** @var string|null $tenantKey */
         $tenantKey = $this->option('tenant');
         $json = (bool) $this->option('json');
 
         $results = [];
 
-        $scopes = match ($scope) {
-            'central' => [MigrationScope::Central],
-            'tenant' => [MigrationScope::Tenant],
-            default => [MigrationScope::Central, MigrationScope::Tenant],
-        };
+        $scopes = $this->parseMigrationScopes($scope);
+        if ($scopes === null) {
+            return $this->failWithMessage($this->invalidScopeMessage($scope), $json);
+        }
+
+        if (($scope === 'tenant' || $tenantKey !== null) && $tenantAdapter instanceof NullTenantAdapter) {
+            return $this->failWithMessage('No tenant adapter configured. Set data-migrations.tenant_adapter in your config.', $json);
+        }
+
+        if ($specificName !== null) {
+            $scopes = array_values(array_filter(
+                $scopes,
+                fn (MigrationScope $migrationScope): bool => array_key_exists($specificName, $discovery->discover($migrationScope)),
+            ));
+
+            if ($scopes === []) {
+                return $this->failWithMessage('Migration not found: '.$specificName, $json);
+            }
+
+            if ($scopes === [MigrationScope::Tenant] && $tenantAdapter instanceof NullTenantAdapter) {
+                return $this->failWithMessage('No tenant adapter configured. Set data-migrations.tenant_adapter in your config.', $json);
+            }
+        }
 
         if (! $json) {
             $runner->onTenantStart(function (string $key): void {
@@ -94,6 +121,17 @@ class DataMigrateCommand extends Command
         }
 
         return self::SUCCESS;
+    }
+
+    private function failWithMessage(string $message, bool $json): int
+    {
+        if ($json) {
+            $this->line((string) json_encode(['error' => $message], JSON_PRETTY_PRINT));
+        } else {
+            $this->components->error($message);
+        }
+
+        return self::FAILURE;
     }
 
     /** @param  list<RunResult>  $results */

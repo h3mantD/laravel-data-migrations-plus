@@ -132,8 +132,8 @@ class MigrationRunner
     ): RunResult {
         $discovered = $this->discovery->discover($scope);
         $completed = $this->tracking->getCompleted($scope, $targetKey);
-        $running = $this->tracking->getAll($scope, $targetKey)
-            ->where('status', MigrationStatus::Running->value)
+        $blocked = $this->tracking->getAll($scope, $targetKey)
+            ->whereIn('status', [MigrationStatus::Running->value, MigrationStatus::Failed->value])
             ->pluck('migration_name');
 
         /** @var list<string> $successful */
@@ -144,6 +144,10 @@ class MigrationRunner
         $pretended = [];
         $batch = $this->tracking->getNextBatch();
 
+        if ($specificName !== null && ! array_key_exists($specificName, $discovered)) {
+            return new RunResult(failed: [$specificName]);
+        }
+
         foreach ($discovered as $name => $migration) {
             if ($specificName !== null && $name !== $specificName) {
                 continue;
@@ -153,7 +157,7 @@ class MigrationRunner
                 continue;
             }
 
-            if ($running->contains($name)) {
+            if ($blocked->contains($name)) {
                 continue;
             }
 
