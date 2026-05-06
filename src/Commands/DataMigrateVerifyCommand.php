@@ -32,6 +32,15 @@ class DataMigrateVerifyCommand extends Command
             // For verify, we check ALL records regardless of target_key
             $tracked = $tracking->getAllByScope($scope);
 
+            foreach ($discovery->duplicateNames($scope) as $migrationName => $paths) {
+                $errors[] = sprintf(
+                    'Duplicate migration name: %s (%s) exists in: %s.',
+                    $migrationName,
+                    $scope->value,
+                    implode(', ', $paths),
+                );
+            }
+
             foreach ($tracked as $record) {
                 /** @var string $migrationName */
                 $migrationName = $record->migration_name;

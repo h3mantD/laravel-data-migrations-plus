@@ -3,6 +3,8 @@
 return [
     'central_path' => database_path('data-migrations'),
     'tenant_path' => database_path('data-migrations/tenant'),
+    'extra_central_paths' => [],
+    'extra_tenant_paths' => [],
     'extra_paths' => [],
 
     'table' => 'data_migrations',

@@ -114,3 +114,26 @@ it('verifies tenant migration records', function (): void {
 
     $this->artisan('data-migrate:verify', ['--strict' => true])->assertFailed();
 });
+
+it('detects duplicate migration names in configured paths', function (): void {
+    $extraDir = sys_get_temp_dir().'/dm-verify-test/extra';
+    @mkdir($extraDir, 0755, true);
+    config()->set('data-migrations.extra_central_paths', [$extraDir]);
+
+    $stub = <<<'PHP'
+    <?php
+    use H3mantd\DataMigrations\DataMigration;
+    use H3mantd\DataMigrations\DataMigrationContext;
+    return new class extends DataMigration {
+        public function up(DataMigrationContext $context): void {}
+    };
+    PHP;
+
+    file_put_contents($this->centralDir.'/2026_04_01_100000_duplicate.php', $stub);
+    file_put_contents($extraDir.'/2026_04_01_100000_duplicate.php', $stub);
+
+    $this->artisan('data-migrate:verify')->assertFailed();
+
+    array_map(unlink(...), glob($extraDir.'/*'));
+    @rmdir($extraDir);
+});
