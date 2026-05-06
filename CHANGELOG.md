@@ -2,6 +2,13 @@
 
 All notable changes to `laravel-data-migrations-plus` will be documented in this file.
 
+## Unreleased
+
+### Fixed
+- Treat legacy central tracking rows with `target_key = NULL` as completed central migrations to avoid reruns after upgrading to non-null central keys.
+- Make `data-migrate:retry` and `data-migrate:rollback` skip implicit tenant work during default `--scope=all` when no tenant adapter is configured, while keeping explicit tenant commands as clear failures.
+- Scope extra discovery paths with `extra_central_paths` and `extra_tenant_paths`; legacy `extra_paths` remains as a central-only alias.
+
 ## v1.0.0 - 2026-04-04
 
 ### Initial Release
