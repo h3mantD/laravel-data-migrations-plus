@@ -58,13 +58,9 @@ jobs:
           echo "::add-matcher::${{ runner.tool_cache }}/phpunit.json"
 
       - name: Install dependencies
-        env:
-          LARAVEL_VERSION: ${{ matrix.laravel }}
-          TESTBENCH_VERSION: ${{ matrix.testbench }}
-          STABILITY: ${{ matrix.stability }}
         run: |
-          composer require "laravel/framework:${LARAVEL_VERSION}" "orchestra/testbench:${TESTBENCH_VERSION}" --no-interaction --no-update
-          composer update --${STABILITY} --prefer-dist --no-interaction
+          composer require "laravel/framework:${{ matrix.laravel }}" "orchestra/testbench:${{ matrix.testbench }}" --no-interaction --no-update
+          composer update --${{ matrix.stability }} --prefer-dist --no-interaction
 
       - name: List Installed Dependencies
         run: composer show -D
