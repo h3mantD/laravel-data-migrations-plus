@@ -2,7 +2,7 @@
 
 All notable changes to `laravel-data-migrations-plus` will be documented in this file.
 
-## Unreleased
+## v1.0.1 - 2026-05-07
 
 ### Fixed
 - Treat legacy central tracking rows with `target_key = NULL` as completed central migrations to avoid reruns after upgrading to non-null central keys.
