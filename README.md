@@ -61,7 +61,7 @@ Laravel's seeders are not a great fit for these scenarios. Seeders are designed 
 
 ## Requirements
 
-- PHP 8.4+
+- PHP 8.3+
 - Laravel 11, 12, or 13
 - Any database supported by Laravel (MySQL, PostgreSQL, SQLite, SQL Server, Oracle via [yajra/laravel-oci8](https://github.com/yajra/laravel-oci8))
 
