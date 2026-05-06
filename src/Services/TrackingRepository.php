@@ -26,10 +26,34 @@ class TrackingRepository
         int $batch,
         ?string $checksum,
     ): int {
+        $pending = $this->scopedQuery($scope, $targetKey)
+            ->where('migration_name', $name)
+            ->where('status', MigrationStatus::Pending->value)
+            ->first();
+
+        if ($pending !== null) {
+            /** @var int $id */
+            $id = $pending->id;
+
+            $this->connection()->table($this->table())->where('id', $id)->update([
+                'connection_name' => $connectionName,
+                'batch' => $batch,
+                'status' => MigrationStatus::Running->value,
+                'checksum' => $checksum,
+                'error_message' => null,
+                'started_at' => now(),
+                'completed_at' => null,
+                'duration_ms' => null,
+                'updated_at' => now(),
+            ]);
+
+            return $id;
+        }
+
         return $this->connection()->table($this->table())->insertGetId([
             'migration_name' => $name,
             'scope_type' => $scope->value,
-            'target_key' => $targetKey,
+            'target_key' => $this->storedTargetKey($targetKey),
             'connection_name' => $connectionName,
             'batch' => $batch,
             'status' => MigrationStatus::Running->value,
@@ -140,13 +164,22 @@ class TrackingRepository
         $query = $this->connection()->table($this->table())
             ->where('scope_type', $scope->value);
 
-        if ($targetKey === null) {
-            $query->whereNull('target_key');
-        } else {
-            $query->where('target_key', $targetKey);
+        if ($scope === MigrationScope::Central && $targetKey === null) {
+            $query->where(function (Builder $query): void {
+                $query->where('target_key', '')->orWhereNull('target_key');
+            });
+
+            return $query;
         }
 
+        $query->where('target_key', $this->storedTargetKey($targetKey));
+
         return $query;
+    }
+
+    private function storedTargetKey(?string $targetKey): string
+    {
+        return $targetKey ?? '';
     }
 
     private function connection(): ConnectionInterface

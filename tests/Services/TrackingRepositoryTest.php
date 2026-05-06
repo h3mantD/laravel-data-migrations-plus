@@ -3,6 +3,10 @@
 use H3mantd\DataMigrations\Enums\MigrationScope;
 use H3mantd\DataMigrations\Enums\MigrationStatus;
 use H3mantd\DataMigrations\Services\TrackingRepository;
+use Illuminate\Database\QueryException;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 beforeEach(function (): void {
     $this->repo = app(TrackingRepository::class);
@@ -115,4 +119,44 @@ it('returns all records by scope regardless of target_key', function (): void {
 
     $all = $this->repo->getAllByScope(MigrationScope::Tenant);
     expect($all)->toHaveCount(2);
+});
+
+it('enforces central migration uniqueness without nullable target keys', function (): void {
+    $this->repo->recordStart('2026_04_01_100000_unique', MigrationScope::Central, null, 'testing', 1, null);
+
+    $this->repo->recordStart('2026_04_01_100000_unique', MigrationScope::Central, null, 'testing', 1, null);
+})->throws(QueryException::class);
+
+it('treats legacy null central target keys as completed', function (): void {
+    Schema::drop('data_migrations');
+    Schema::create('data_migrations', function (Blueprint $table): void {
+        $table->id();
+        $table->string('migration_name');
+        $table->string('scope_type');
+        $table->string('target_key')->nullable();
+        $table->string('connection_name');
+        $table->unsignedInteger('batch');
+        $table->string('status');
+        $table->string('checksum')->nullable();
+        $table->timestamp('started_at')->nullable();
+        $table->timestamp('completed_at')->nullable();
+        $table->unsignedInteger('duration_ms')->nullable();
+        $table->text('error_message')->nullable();
+        $table->timestamps();
+    });
+
+    DB::table('data_migrations')->insert([
+        'migration_name' => '2026_04_01_100000_legacy',
+        'scope_type' => MigrationScope::Central->value,
+        'target_key' => null,
+        'connection_name' => 'testing',
+        'batch' => 1,
+        'status' => MigrationStatus::Completed->value,
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    expect($this->repo->getCompleted(MigrationScope::Central, null))->toContain('2026_04_01_100000_legacy');
+    expect($this->repo->getAll(MigrationScope::Central, null))->toHaveCount(1);
+    expect($this->repo->getLastBatch(MigrationScope::Central, null))->toBe(1);
 });

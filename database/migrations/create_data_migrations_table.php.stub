@@ -13,7 +13,7 @@ return new class extends Migration
                 $table->id();
                 $table->string('migration_name');
                 $table->string('scope_type');
-                $table->string('target_key')->nullable();
+                $table->string('target_key')->default('');
                 $table->string('connection_name');
                 $table->unsignedInteger('batch');
                 $table->string('status');
