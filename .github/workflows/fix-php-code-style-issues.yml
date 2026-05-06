@@ -4,8 +4,7 @@ on:
   push:
     paths:
       - '**.php'
-    paths-ignore:
-      - 'example/**'
+      - '!example/**'
 
 permissions:
   contents: write

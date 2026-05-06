@@ -6,25 +6,28 @@ on:
       - '**.php'
       - 'phpstan.neon.dist'
       - '.github/workflows/phpstan.yml'
-    paths-ignore:
-      - 'example/**'
+      - '!example/**'
 
 jobs:
   phpstan:
-    name: phpstan
+    name: phpstan - PHP ${{ matrix.php }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    strategy:
+      fail-fast: true
+      matrix:
+        php: ['8.3', '8.4']
     steps:
       - uses: actions/checkout@v6
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.4'
+          php-version: ${{ matrix.php }}
           coverage: none
 
       - name: Install composer dependencies
         uses: ramsey/composer-install@v4
 
       - name: Run PHPStan
-        run: ./vendor/bin/phpstan --error-format=github
+        run: php -d memory_limit=-1 ./vendor/bin/phpstan --error-format=github
