@@ -4,13 +4,22 @@ declare(strict_types=1);
 
 namespace H3mantd\DataMigrations\Commands;
 
+use H3mantd\DataMigrations\Commands\Concerns\ParsesMigrationScopes;
+use H3mantd\DataMigrations\Contracts\TenantAdapter;
 use H3mantd\DataMigrations\Enums\MigrationScope;
+use H3mantd\DataMigrations\Enums\MigrationStatus;
+use H3mantd\DataMigrations\Services\DiscoveryService;
 use H3mantd\DataMigrations\Services\MigrationRunner;
 use H3mantd\DataMigrations\Services\TrackingRepository;
+use H3mantd\DataMigrations\Support\NullTenantAdapter;
 use Illuminate\Console\Command;
+use Illuminate\Support\Collection;
+use stdClass;
 
 class DataMigrateRetryCommand extends Command
 {
+    use ParsesMigrationScopes;
+
     public $signature = 'data-migrate:retry
         {--scope=all : Scope to retry (central, tenant, or all)}
         {--tenant= : Retry for a specific tenant}
@@ -19,8 +28,12 @@ class DataMigrateRetryCommand extends Command
 
     public $description = 'Retry failed data migrations';
 
-    public function handle(TrackingRepository $tracking, MigrationRunner $runner): int
-    {
+    public function handle(
+        TrackingRepository $tracking,
+        MigrationRunner $runner,
+        DiscoveryService $discovery,
+        TenantAdapter $tenantAdapter,
+    ): int {
         if (app()->isProduction() && ! $this->option('force')) {
             $this->components->error('Use --force to run in production.');
 
@@ -33,11 +46,14 @@ class DataMigrateRetryCommand extends Command
         $tenantKey = $this->option('tenant');
         $json = (bool) $this->option('json');
 
-        $scopes = match ($scope) {
-            'central' => [MigrationScope::Central],
-            'tenant' => [MigrationScope::Tenant],
-            default => [MigrationScope::Central, MigrationScope::Tenant],
-        };
+        $scopes = $this->parseMigrationScopes($scope);
+        if ($scopes === null) {
+            return $this->failWithMessage($this->invalidScopeMessage($scope), $json);
+        }
+
+        if (($scope === 'tenant' || $tenantKey !== null) && $tenantAdapter instanceof NullTenantAdapter) {
+            return $this->failWithMessage('No tenant adapter configured. Set data-migrations.tenant_adapter in your config.', $json);
+        }
 
         /** @var list<string> $retried */
         $retried = [];
@@ -46,7 +62,11 @@ class DataMigrateRetryCommand extends Command
 
         foreach ($scopes as $migrationScope) {
             $targetKey = $migrationScope === MigrationScope::Tenant ? $tenantKey : null;
-            $failed = $tracking->getFailed($migrationScope, $targetKey);
+            if ($migrationScope === MigrationScope::Tenant && $tenantAdapter instanceof NullTenantAdapter) {
+                continue;
+            }
+
+            $failed = $this->failedRecords($tracking, $migrationScope, $targetKey);
 
             if ($failed->isEmpty()) {
                 continue;
@@ -58,12 +78,25 @@ class DataMigrateRetryCommand extends Command
                 /** @var string $migrationName */
                 $migrationName = $record->migration_name;
 
-                // Delete the failed record so the runner can insert a fresh one
-                $tracking->markRolledBack($recordId);
+                if ($discovery->getFilePath($migrationName, $migrationScope) === null) {
+                    $failedAgain[] = $migrationName;
+
+                    continue;
+                }
+
+                /** @var string|null $recordTargetKey */
+                $recordTargetKey = $migrationScope === MigrationScope::Tenant ? $record->target_key : null;
+                if ($migrationScope === MigrationScope::Tenant && $recordTargetKey !== null && ! $this->tenantExists($tenantAdapter, $recordTargetKey)) {
+                    $failedAgain[] = $migrationName;
+
+                    continue;
+                }
+
+                $tracking->resetForRetry($recordId);
 
                 $result = $runner->run(
                     scope: $migrationScope,
-                    targetKey: $targetKey,
+                    targetKey: $recordTargetKey ?? $targetKey,
                     pretend: false,
                     continueOnFailure: true,
                     specificName: $migrationName,
@@ -77,7 +110,7 @@ class DataMigrateRetryCommand extends Command
         if ($json) {
             $this->line((string) json_encode(['retried' => $retried, 'failed' => $failedAgain], JSON_PRETTY_PRINT));
 
-            return self::SUCCESS;
+            return count($failedAgain) > 0 ? self::FAILURE : self::SUCCESS;
         }
 
         if (empty($retried) && empty($failedAgain)) {
@@ -95,5 +128,39 @@ class DataMigrateRetryCommand extends Command
         }
 
         return count($failedAgain) > 0 ? self::FAILURE : self::SUCCESS;
+    }
+
+    /** @return Collection<int, stdClass> */
+    private function failedRecords(TrackingRepository $tracking, MigrationScope $scope, ?string $targetKey): Collection
+    {
+        if ($scope === MigrationScope::Tenant && $targetKey === null) {
+            return $tracking->getAllByScope($scope)
+                ->where('status', MigrationStatus::Failed->value)
+                ->values();
+        }
+
+        return $tracking->getFailed($scope, $targetKey);
+    }
+
+    private function tenantExists(TenantAdapter $tenantAdapter, string $targetKey): bool
+    {
+        foreach ($tenantAdapter->tenants() as $tenant) {
+            if ($tenantAdapter->tenantKey($tenant) === $targetKey) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function failWithMessage(string $message, bool $json): int
+    {
+        if ($json) {
+            $this->line((string) json_encode(['error' => $message], JSON_PRETTY_PRINT));
+        } else {
+            $this->components->error($message);
+        }
+
+        return self::FAILURE;
     }
 }

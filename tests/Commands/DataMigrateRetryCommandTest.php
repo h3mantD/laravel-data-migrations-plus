@@ -81,3 +81,78 @@ it('does not run unrelated pending migrations during retry', function (): void {
     expect($completed)->toContain('2026_04_01_100000_was_broken');
     expect($completed)->not->toContain('2026_04_02_100000_unrelated_new');
 });
+
+it('rejects invalid scope', function (): void {
+    $this->artisan('data-migrate:retry', ['--scope' => 'bogus'])
+        ->assertFailed();
+});
+
+it('fails explicit tenant scope when no adapter is configured', function (): void {
+    $this->artisan('data-migrate:retry', ['--scope' => 'tenant'])
+        ->assertFailed();
+});
+
+it('fails tenant option when no adapter is configured', function (): void {
+    $this->artisan('data-migrate:retry', ['--tenant' => 'acme-1'])
+        ->assertFailed();
+});
+
+it('skips tenant retry during default all scope when no adapter is configured', function (): void {
+    $stub = <<<'PHP'
+    <?php
+    use H3mantd\DataMigrations\DataMigration;
+    use H3mantd\DataMigrations\DataMigrationContext;
+    return new class extends DataMigration {
+        public bool $transactional = false;
+        public function up(DataMigrationContext $context): void {}
+    };
+    PHP;
+    file_put_contents($this->centralDir.'/2026_04_01_100000_was_broken.php', $stub);
+
+    $repo = app(TrackingRepository::class);
+    $centralId = $repo->recordStart('2026_04_01_100000_was_broken', MigrationScope::Central, null, 'testing', 1, null);
+    $repo->recordFailure($centralId, 'central error', 10);
+    $tenantId = $repo->recordStart('2026_04_01_100000_tenant_was_broken', MigrationScope::Tenant, 'acme-1', 'testing', 1, null);
+    $repo->recordFailure($tenantId, 'tenant error', 10);
+
+    $this->artisan('data-migrate:retry')->assertSuccessful();
+
+    expect($repo->getCompleted(MigrationScope::Central, null))->toContain('2026_04_01_100000_was_broken');
+    expect($repo->getFailed(MigrationScope::Tenant, 'acme-1'))->toHaveCount(1);
+});
+
+it('preserves failed record when retry file is missing', function (): void {
+    $repo = app(TrackingRepository::class);
+    $id = $repo->recordStart('2026_04_01_100000_missing_file', MigrationScope::Central, null, 'testing', 1, null);
+    $repo->recordFailure($id, 'original error', 10);
+
+    $this->artisan('data-migrate:retry', ['--scope' => 'central'])->assertFailed();
+
+    $failed = $repo->getFailed(MigrationScope::Central, null);
+    expect($failed)->toHaveCount(1);
+    expect($failed->first()->id)->toBe($id);
+});
+
+it('retries failed migration in place', function (): void {
+    $stub = <<<'PHP'
+    <?php
+    use H3mantd\DataMigrations\DataMigration;
+    use H3mantd\DataMigrations\DataMigrationContext;
+    return new class extends DataMigration {
+        public bool $transactional = false;
+        public function up(DataMigrationContext $context): void {}
+    };
+    PHP;
+    file_put_contents($this->centralDir.'/2026_04_01_100000_retry_in_place.php', $stub);
+
+    $repo = app(TrackingRepository::class);
+    $id = $repo->recordStart('2026_04_01_100000_retry_in_place', MigrationScope::Central, null, 'testing', 1, null);
+    $repo->recordFailure($id, 'original error', 10);
+
+    $this->artisan('data-migrate:retry', ['--scope' => 'central'])->assertSuccessful();
+
+    $records = $repo->getAll(MigrationScope::Central, null);
+    expect($records)->toHaveCount(1);
+    expect($records->first()->id)->toBe($id);
+    expect($repo->getCompleted(MigrationScope::Central, null))->toContain('2026_04_01_100000_retry_in_place');
+});
