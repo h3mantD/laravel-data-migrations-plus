@@ -776,7 +776,7 @@ php artisan data-migrate --json
 | `--continue-on-failure` | `false` | Don't halt the batch on error |
 | `--json` | `false` | Machine-readable JSON output |
 
-When running in `--scope=all` (the default), central migrations execute first, then tenant migrations. This ensures that any global data your tenant migrations depend on is already in place.
+When running in `--scope=all` (the default), central migrations execute first, then tenant migrations. This ensures that any global data your tenant migrations depend on is already in place. If no `tenant_adapter` is configured, the implicit tenant phase is skipped; explicit tenant commands such as `--scope=tenant` or `--tenant=acme` fail with a clear configuration error.
 
 ### Pretend Mode
 
@@ -829,6 +829,8 @@ php artisan data-migrate:retry --json
 
 The retry command only re-runs migrations that previously failed. It does **not** run new pending migrations — keeping the blast radius small.
 
+When using the default `--scope=all` without a configured `tenant_adapter`, central failed migrations are retried and tenant failures are skipped. Explicit tenant retry commands require a configured adapter.
+
 ### Rolling Back
 
 Roll back the last batch of migrations (only works if `down()` is implemented):
@@ -840,6 +842,8 @@ php artisan data-migrate:rollback --scope=central
 ```
 
 Attempting to rollback a migration that doesn't implement `down()` will fail with a clear error. This is intentional — the package makes irreversibility the safe default.
+
+When using the default `--scope=all` without a configured `tenant_adapter`, central rollback still runs and tenant rollback is skipped. Explicit tenant rollback commands require a configured adapter.
 
 ### Integrity Verification
 
@@ -1060,12 +1064,15 @@ return [
     |--------------------------------------------------------------------------
     |
     | The directories where data migration files are stored. Central migrations
-    | go in central_path, tenant migrations go in tenant_path. You may add
-    | additional paths via extra_paths (merged into both scopes).
+    | go in central_path, tenant migrations go in tenant_path. Additional paths
+    | must be scoped so migrations do not run in the wrong context.
     |
     */
     'central_path' => database_path('data-migrations'),
     'tenant_path' => database_path('data-migrations/tenant'),
+    'extra_central_paths' => [],
+    'extra_tenant_paths' => [],
+    // Deprecated central-only alias retained for older published configs.
     'extra_paths' => [],
 
     /*
@@ -1124,13 +1131,16 @@ return [
     |--------------------------------------------------------------------------
     |
     | The fully qualified class name of your TenantAdapter implementation.
-    | Set to null if you don't use multi-tenancy. When null, running
-    | data-migrate --scope=all silently skips the tenant scope.
+    | Set to null if you don't use multi-tenancy. When null, default
+    | --scope=all commands skip implicit tenant work; explicit tenant
+    | commands fail with a clear configuration error.
     |
     */
     'tenant_adapter' => null,
 ];
 ```
+
+Use `extra_central_paths` for additional central-only migration directories and `extra_tenant_paths` for additional tenant-only migration directories. The older `extra_paths` key is still read as a central-only alias for already-published config files.
 
 ## Tracking
 
@@ -1141,7 +1151,7 @@ All migration execution is recorded in the `data_migrations` table on your centr
 | `id` | auto-increment | Primary key |
 | `migration_name` | string | Filename without extension (e.g., `2026_04_01_100000_add_roles`) |
 | `scope_type` | string | `central` or `tenant` |
-| `target_key` | string, nullable | Tenant identifier (`null` for central) |
+| `target_key` | string | Tenant identifier; central migrations store an empty string |
 | `connection_name` | string | Database connection used for execution |
 | `batch` | integer | Groups migrations that ran together |
 | `status` | string | `pending`, `running`, `completed`, or `failed` |
@@ -1151,7 +1161,7 @@ All migration execution is recorded in the `data_migrations` table on your centr
 | `duration_ms` | integer | Execution time in milliseconds |
 | `error_message` | text, nullable | Error details on failure |
 
-Central and tenant migrations are tracked in the same table. A unique constraint on `(migration_name, scope_type, target_key)` ensures each migration is tracked independently per scope and tenant.
+Central and tenant migrations are tracked in the same table. Central migrations use an empty `target_key` so the unique constraint on `(migration_name, scope_type, target_key)` is enforced consistently across supported databases; tenant migrations use the adapter-provided tenant key.
 
 ## Database Compatibility
 
