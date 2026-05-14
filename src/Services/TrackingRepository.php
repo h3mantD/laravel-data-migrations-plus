@@ -105,6 +105,23 @@ class TrackingRepository
             ->get();
     }
 
+    /** @return Collection<int, stdClass> */
+    public function getRetryable(MigrationScope $scope, ?string $targetKey): Collection
+    {
+        $ttlConfig = config('data-migrations.lock.ttl', 1800);
+        $ttl = is_int($ttlConfig) ? $ttlConfig : 1800;
+
+        return $this->scopedQuery($scope, $targetKey)
+            ->where(function (Builder $query) use ($ttl): void {
+                $query->where('status', MigrationStatus::Failed->value)
+                    ->orWhere(function (Builder $query) use ($ttl): void {
+                        $query->where('status', MigrationStatus::Running->value)
+                            ->where('started_at', '<=', now()->subSeconds($ttl));
+                    });
+            })
+            ->get();
+    }
+
     /** @return Collection<int|string, mixed> */
     public function getCompleted(MigrationScope $scope, ?string $targetKey): Collection
     {

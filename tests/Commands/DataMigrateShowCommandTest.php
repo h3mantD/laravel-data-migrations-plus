@@ -5,14 +5,18 @@ use H3mantd\DataMigrations\Services\TrackingRepository;
 
 beforeEach(function (): void {
     $this->centralDir = sys_get_temp_dir().'/dm-show-test/central';
+    $this->tenantDir = sys_get_temp_dir().'/dm-show-test/tenant';
     @mkdir($this->centralDir, 0755, true);
+    @mkdir($this->tenantDir, 0755, true);
     config()->set('data-migrations.central_path', $this->centralDir);
-    config()->set('data-migrations.tenant_path', sys_get_temp_dir().'/dm-show-test/tenant');
+    config()->set('data-migrations.tenant_path', $this->tenantDir);
 });
 
 afterEach(function (): void {
     array_map(unlink(...), glob($this->centralDir.'/*'));
+    array_map(unlink(...), glob($this->tenantDir.'/*'));
     @rmdir($this->centralDir);
+    @rmdir($this->tenantDir);
     @rmdir(dirname($this->centralDir));
 });
 
@@ -76,4 +80,67 @@ it('shows migration that exists on disk but never ran', function (): void {
     $this->artisan('data-migrate:show', ['name' => '2026_04_01_100000_never_ran'])
         ->assertSuccessful()
         ->expectsOutputToContain('No execution records found');
+});
+
+it('fails when a migration name exists in central and tenant scopes without scope', function (): void {
+    $stub = <<<'PHP'
+    <?php
+    use H3mantd\DataMigrations\DataMigration;
+    use H3mantd\DataMigrations\DataMigrationContext;
+    return new class extends DataMigration {
+        public function up(DataMigrationContext $context): void {}
+    };
+    PHP;
+    file_put_contents($this->centralDir.'/2026_04_01_100000_same_name.php', $stub);
+    file_put_contents($this->tenantDir.'/2026_04_01_100000_same_name.php', $stub);
+
+    $this->artisan('data-migrate:show', ['name' => '2026_04_01_100000_same_name'])
+        ->assertFailed()
+        ->expectsOutputToContain('ambiguous');
+});
+
+it('disambiguates same-name migrations with scope', function (): void {
+    $stub = <<<'PHP'
+    <?php
+    use H3mantd\DataMigrations\DataMigration;
+    use H3mantd\DataMigrations\DataMigrationContext;
+    return new class extends DataMigration {
+        public function up(DataMigrationContext $context): void {}
+    };
+    PHP;
+    file_put_contents($this->centralDir.'/2026_04_01_100000_same_name.php', $stub);
+    file_put_contents($this->tenantDir.'/2026_04_01_100000_same_name.php', $stub);
+
+    $this->artisan('data-migrate:show', ['name' => '2026_04_01_100000_same_name', '--scope' => 'tenant'])
+        ->assertSuccessful()
+        ->expectsOutputToContain('tenant');
+});
+
+it('rejects invalid scope', function (): void {
+    $this->artisan('data-migrate:show', ['name' => 'anything', '--scope' => 'all'])
+        ->assertFailed()
+        ->expectsOutputToContain('Invalid scope');
+});
+
+it('does not show checksum details when checksums are disabled', function (): void {
+    config()->set('data-migrations.checksum.enabled', false);
+
+    $stub = <<<'PHP'
+    <?php
+    use H3mantd\DataMigrations\DataMigration;
+    use H3mantd\DataMigrations\DataMigrationContext;
+    return new class extends DataMigration {
+        public function up(DataMigrationContext $context): void {}
+    };
+    PHP;
+    file_put_contents($this->centralDir.'/2026_04_01_100000_hidden_checksum.php', $stub);
+
+    $repo = app(TrackingRepository::class);
+    $id = $repo->recordStart('2026_04_01_100000_hidden_checksum', MigrationScope::Central, null, 'testing', 1, 'abc123');
+    $repo->recordSuccess($id, 100);
+
+    $this->artisan('data-migrate:show', ['name' => '2026_04_01_100000_hidden_checksum'])
+        ->assertSuccessful()
+        ->doesntExpectOutputToContain('Checksum')
+        ->doesntExpectOutputToContain('abc123');
 });

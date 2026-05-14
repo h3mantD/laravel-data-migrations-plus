@@ -1,7 +1,9 @@
 <?php
 
+use H3mantd\DataMigrations\Contracts\TenantAdapter;
 use H3mantd\DataMigrations\Enums\MigrationScope;
 use H3mantd\DataMigrations\Services\TrackingRepository;
+use H3mantd\DataMigrations\Tests\Fixtures\InMemoryTenantAdapter;
 
 beforeEach(function (): void {
     $this->centralDir = sys_get_temp_dir().'/dm-cmd-test/central';
@@ -93,6 +95,48 @@ it('fails explicit tenant scope when no adapter is configured', function (): voi
 it('fails tenant option when no adapter is configured', function (): void {
     $this->artisan('data-migrate', ['--tenant' => 'acme-1'])
         ->assertFailed();
+});
+
+it('fails when an explicit tenant key does not exist', function (): void {
+    config()->set('data-migrations.tenant_adapter', InMemoryTenantAdapter::class);
+    app()->instance(TenantAdapter::class, new InMemoryTenantAdapter);
+    InMemoryTenantAdapter::$tenants = ['acme-1'];
+
+    $this->artisan('data-migrate', ['--scope' => 'tenant', '--tenant' => 'missing'])
+        ->assertFailed()
+        ->expectsOutputToContain('Tenant not found: missing');
+});
+
+it('fails tenant migrations when tracking connection is not explicitly configured', function (): void {
+    config()->set('data-migrations.tenant_adapter', InMemoryTenantAdapter::class);
+    config()->set('data-migrations.connection');
+
+    app()->instance(TenantAdapter::class, new InMemoryTenantAdapter);
+    InMemoryTenantAdapter::$tenants = ['acme-1'];
+
+    $this->artisan('data-migrate', ['--scope' => 'tenant'])
+        ->assertFailed()
+        ->expectsOutputToContain('Set data-migrations.connection');
+});
+
+it('does not record checksums when checksums are disabled', function (): void {
+    config()->set('data-migrations.checksum.enabled', false);
+
+    $stub = <<<'PHP'
+    <?php
+    use H3mantd\DataMigrations\DataMigration;
+    use H3mantd\DataMigrations\DataMigrationContext;
+    return new class extends DataMigration {
+        public bool $transactional = false;
+        public function up(DataMigrationContext $context): void {}
+    };
+    PHP;
+    file_put_contents($this->centralDir.'/2026_04_01_100000_no_checksum.php', $stub);
+
+    $this->artisan('data-migrate', ['--scope' => 'central'])->assertSuccessful();
+
+    $record = app(TrackingRepository::class)->getAll(MigrationScope::Central, null)->first();
+    expect($record->checksum)->toBeNull();
 });
 
 it('fails when a specific migration name is not discovered', function (): void {

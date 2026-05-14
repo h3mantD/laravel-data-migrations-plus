@@ -64,6 +64,22 @@ it('returns failed migrations', function (): void {
     expect($failed->first()->migration_name)->toBe('2026_04_01_100000_first');
 });
 
+it('returns failed and stale running migrations as retryable', function (): void {
+    config()->set('data-migrations.lock.ttl', 60);
+
+    $failedId = $this->repo->recordStart('2026_04_01_100000_failed', MigrationScope::Central, null, 'testing', 1, null);
+    $this->repo->recordFailure($failedId, 'error', 10);
+
+    $staleId = $this->repo->recordStart('2026_04_01_100000_stale', MigrationScope::Central, null, 'testing', 1, null);
+    DB::table('data_migrations')->where('id', $staleId)->update(['started_at' => now()->subSeconds(61)]);
+
+    $freshId = $this->repo->recordStart('2026_04_01_100000_fresh', MigrationScope::Central, null, 'testing', 1, null);
+    DB::table('data_migrations')->where('id', $freshId)->update(['started_at' => now()->subSeconds(30)]);
+
+    expect($this->repo->getRetryable(MigrationScope::Central, null)->pluck('migration_name')->all())
+        ->toBe(['2026_04_01_100000_failed', '2026_04_01_100000_stale']);
+});
+
 it('tracks tenant migrations with target_key', function (): void {
     $this->repo->recordStart('2026_04_01_100000_backfill', MigrationScope::Tenant, 'acme-1', 'tenant', 1, null);
     $this->repo->recordStart('2026_04_01_100000_backfill', MigrationScope::Tenant, 'acme-2', 'tenant', 1, null);

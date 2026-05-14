@@ -42,6 +42,34 @@ class DataMigrateRollbackCommand extends Command
             return self::FAILURE;
         }
 
+        $json = (bool) $this->option('json');
+        $step = $this->option('step');
+        if (! $this->isPositiveInteger($step)) {
+            return $this->failWithMessage('Invalid step: must be a positive integer.', $json);
+        }
+
+        /** @var string $scope */
+        $scope = $this->option('scope');
+        /** @var string|null $tenantKey */
+        $tenantKey = $this->option('tenant');
+
+        $scopes = $this->parseMigrationScopes($scope);
+        if ($scopes === null) {
+            return $this->failWithMessage($this->invalidScopeMessage($scope), $json);
+        }
+
+        if (($scope === 'tenant' || $tenantKey !== null) && $tenantAdapter instanceof NullTenantAdapter) {
+            return $this->failWithMessage('No tenant adapter configured. Set data-migrations.tenant_adapter in your config.', $json);
+        }
+
+        if ($tenantKey !== null && ! $this->tenantExists($tenantAdapter, $tenantKey)) {
+            return $this->failWithMessage('Tenant not found: '.$tenantKey, $json);
+        }
+
+        if ($this->tenantTrackingConnectionMissing($scopes, $tenantAdapter)) {
+            return $this->failWithMessage($this->missingTenantTrackingConnectionMessage(), $json);
+        }
+
         if (! $lock->acquire()) {
             $this->components->error('Could not acquire lock. Another migration may be running.');
 
@@ -91,9 +119,9 @@ class DataMigrateRollbackCommand extends Command
             if ($migrationScope === MigrationScope::Tenant && $targetKey === null) {
                 foreach ($tenantAdapter->tenants() as $tenant) {
                     $tenantKeyForRollback = $tenantAdapter->tenantKey($tenant);
-                    $tenantAdapter->enter($tenant);
 
                     try {
+                        $tenantAdapter->enter($tenant);
                         $this->rollbackTarget($tracking, $discovery, $db, $tenantAdapter, $migrationScope, $tenantKeyForRollback, $steps, $rolledBack, $errors);
                     } finally {
                         $tenantAdapter->leave();
@@ -220,9 +248,8 @@ class DataMigrateRollbackCommand extends Command
                 continue;
             }
 
-            $tenantAdapter->enter($tenant);
-
             try {
+                $tenantAdapter->enter($tenant);
                 $this->rollbackTarget($tracking, $discovery, $db, $tenantAdapter, MigrationScope::Tenant, $targetKey, $steps, $rolledBack, $errors);
             } finally {
                 $tenantAdapter->leave();
@@ -243,5 +270,27 @@ class DataMigrateRollbackCommand extends Command
         }
 
         return self::FAILURE;
+    }
+
+    private function isPositiveInteger(mixed $value): bool
+    {
+        if (! is_scalar($value)) {
+            return false;
+        }
+
+        $stringValue = (string) $value;
+
+        return ctype_digit($stringValue) && (int) $stringValue > 0;
+    }
+
+    private function tenantExists(TenantAdapter $tenantAdapter, string $targetKey): bool
+    {
+        foreach ($tenantAdapter->tenants() as $tenant) {
+            if ($tenantAdapter->tenantKey($tenant) === $targetKey) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

@@ -57,6 +57,14 @@ class DataMigrateCommand extends Command
             return $this->failWithMessage('No tenant adapter configured. Set data-migrations.tenant_adapter in your config.', $json);
         }
 
+        if ($tenantKey !== null && ! $this->tenantExists($tenantAdapter, $tenantKey)) {
+            return $this->failWithMessage('Tenant not found: '.$tenantKey, $json);
+        }
+
+        if ($this->tenantTrackingConnectionMissing($scopes, $tenantAdapter)) {
+            return $this->failWithMessage($this->missingTenantTrackingConnectionMessage(), $json);
+        }
+
         if ($specificName !== null) {
             $scopes = array_values(array_filter(
                 $scopes,
@@ -132,6 +140,17 @@ class DataMigrateCommand extends Command
         }
 
         return self::FAILURE;
+    }
+
+    private function tenantExists(TenantAdapter $tenantAdapter, string $targetKey): bool
+    {
+        foreach ($tenantAdapter->tenants() as $tenant) {
+            if ($tenantAdapter->tenantKey($tenant) === $targetKey) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /** @param  list<RunResult>  $results */

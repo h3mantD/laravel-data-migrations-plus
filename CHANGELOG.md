@@ -2,6 +2,22 @@
 
 All notable changes to `laravel-data-migrations-plus` will be documented in this file.
 
+## Unreleased
+
+### Fixed
+- Retry stale `running` migration rows when their `started_at` timestamp is older than the configured lock TTL.
+- Reject duplicate migration names within the same scope before execution.
+- Validate explicit tenant keys before migration, retry, and rollback commands run.
+- Stop tenant rollback commands from rolling back central migrations before an invalid tenant is rejected.
+- Clean up tenant context even when entering a tenant throws an exception.
+- Require an explicit central tracking connection for tenant migration, retry, and rollback commands when a tenant adapter is configured.
+- Respect `checksum.enabled=false` during execution and in `data-migrate:show` output.
+- Require `data-migrate:rollback --step` to be a positive integer.
+
+### Changed
+- `data-migrate:show` accepts `--scope=central|tenant` and requires it when central and tenant migrations share a name.
+- Runtime Illuminate package dependencies are declared directly in `composer.json`.
+
 ## v1.0.1 - 2026-05-07
 
 ### Fixed
@@ -48,5 +64,5 @@ A migration-like system for versioned application data changes in Laravel.
 - Mixed engines across central and tenant databases
 
 #### Requirements
-- PHP 8.4+
+- PHP 8.3+
 - Laravel 11, 12, or 13

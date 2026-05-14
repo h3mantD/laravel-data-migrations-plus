@@ -771,12 +771,16 @@ php artisan data-migrate --json
 | `--scope` | `all` | `central`, `tenant`, or `all` |
 | `--tenant` | *(all tenants)* | Run for a specific tenant only |
 | `--name` | *(none)* | Run a specific migration by name |
-| `--pretend` | `false` | Dry run — show what would execute |
+| `--pretend` | `false` | Dry run. Show what would execute |
 | `--force` | `false` | Required in production environment |
 | `--continue-on-failure` | `false` | Don't halt the batch on error |
 | `--json` | `false` | Machine-readable JSON output |
 
-When running in `--scope=all` (the default), central migrations execute first, then tenant migrations. This ensures that any global data your tenant migrations depend on is already in place. If no `tenant_adapter` is configured, the implicit tenant phase is skipped; explicit tenant commands such as `--scope=tenant` or `--tenant=acme` fail with a clear configuration error.
+When you run `--scope=all` (the default), central migrations run first. Tenant migrations run after that. If no `tenant_adapter` is configured, the tenant step is skipped. Explicit tenant commands, such as `--scope=tenant` or `--tenant=acme`, fail with a clear configuration error.
+
+Explicit tenant commands check the tenant key against your configured adapter. If no tenant matches the key returned by `TenantAdapter::tenantKey()`, the command fails with `Tenant not found`.
+
+When a tenant adapter is configured, tenant commands also require `data-migrations.connection` to point to your central tracking database connection. This keeps tracking reads and writes on the central database instead of the tenant database.
 
 ### Pretend Mode
 
@@ -809,13 +813,17 @@ Use `data-migrate:show` to get detailed information about a specific migration:
 
 ```bash
 php artisan data-migrate:show 2026_04_01_100000_add_default_roles
+php artisan data-migrate:show 2026_04_01_100000_add_default_roles --scope=central
+php artisan data-migrate:show 2026_04_01_100000_add_default_roles --scope=tenant
 php artisan data-migrate:show 2026_04_01_100000_add_default_roles --json
 ```
 
 This displays:
 - File path, scope, type, and transactional flag
 - Current file checksum
-- Full execution history: per-tenant status, batch, duration, checksum match, and any error messages
+- Full execution history, including per-tenant status, batch, duration, checksum match, and any error messages
+
+If central and tenant migrations use the same name, pass `--scope=central` or `--scope=tenant`. Duplicate names within the same scope are rejected during execution and reported by `data-migrate:verify`.
 
 ### Retrying Failed Migrations
 
@@ -827,9 +835,11 @@ php artisan data-migrate:retry --scope=tenant --tenant=acme
 php artisan data-migrate:retry --json
 ```
 
-The retry command only re-runs migrations that previously failed. It does **not** run new pending migrations — keeping the blast radius small.
+The retry command only runs migrations that already failed. It doesn't run new pending migrations.
 
-When using the default `--scope=all` without a configured `tenant_adapter`, central failed migrations are retried and tenant failures are skipped. Explicit tenant retry commands require a configured adapter.
+If a process dies after marking a migration as `running`, `data-migrate:retry` can retry that row when its `started_at` timestamp is older than the configured `lock.ttl`.
+
+When you use the default `--scope=all` without a configured `tenant_adapter`, central failed migrations are retried and tenant failures are skipped. Explicit tenant retry commands require a configured adapter and an explicit central tracking connection.
 
 ### Rolling Back
 
@@ -841,9 +851,11 @@ php artisan data-migrate:rollback --step=2    # Roll back last 2 batches
 php artisan data-migrate:rollback --scope=central
 ```
 
-Attempting to rollback a migration that doesn't implement `down()` will fail with a clear error. This is intentional — the package makes irreversibility the safe default.
+The `--step` value must be a positive integer.
 
-When using the default `--scope=all` without a configured `tenant_adapter`, central rollback still runs and tenant rollback is skipped. Explicit tenant rollback commands require a configured adapter.
+Rolling back a migration that doesn't implement `down()` fails with a clear error. This is intentional because data migrations are irreversible by default.
+
+When you use the default `--scope=all` without a configured `tenant_adapter`, central rollback still runs and tenant rollback is skipped. Explicit tenant rollback commands require a configured adapter and an explicit central tracking connection.
 
 ### Integrity Verification
 
@@ -855,9 +867,9 @@ php artisan data-migrate:verify --strict
 ```
 
 It detects:
-- **Missing files** — a migration was recorded as executed, but the file no longer exists on disk
-- **Checksum drift** — a migration file was modified after it was executed (hard-fails by default)
-- **Duplicate names** — the same migration name appears in multiple paths
+- **Missing files**: a migration was recorded as executed, but the file no longer exists on disk
+- **Checksum drift**: a migration file was modified after it was executed. This fails by default
+- **Duplicate names**: the same migration name appears in multiple paths
 
 Use `--strict` in CI pipelines to fail on any warning:
 
@@ -868,7 +880,7 @@ php artisan data-migrate:verify --strict
 
 ## Multi-Tenancy
 
-The package supports tenant-aware execution through adapters. It does **not** depend on any specific tenancy package — you implement a simple interface and register it in your config.
+The package supports tenant-aware execution through adapters. It doesn't depend on any specific tenancy package. You implement a simple interface and register it in your config.
 
 ### The TenantAdapter Contract
 
@@ -998,21 +1010,23 @@ Register your adapter in `config/data-migrations.php`:
 
 ### Setting the Tracking Connection
 
-> **This is critical for multi-tenant setups.**
+> **Important:** Set this value when you use tenant migrations.
 
-In multi-tenant applications where the default database connection changes when entering a tenant context (which is how both Stancl and Spatie tenancy work), you **must** explicitly set the connection for the tracking table:
+In many multi-tenant applications, the default database connection changes when the app enters a tenant context. Stancl and Spatie tenancy both work this way. In these applications, you must set the connection for the tracking table:
 
 ```php
 // config/data-migrations.php
-'connection' => 'mysql',  // or 'pgsql', 'sqlite' — your central DB connection name
+'connection' => 'mysql',  // or 'pgsql', 'sqlite'. Use your central DB connection name
 ```
 
-If left as `null`, the tracking repository uses the default connection. When tenancy is initialized, the default switches to the tenant's database — and the package will try to read/write the `data_migrations` table in the tenant database (where it doesn't exist). Setting an explicit connection prevents this.
+If this value is `null`, the tracking repository uses the default connection. After tenancy starts, that may be the tenant database. The package would then try to read and write the `data_migrations` table in the tenant database, where it usually doesn't exist. Set an explicit connection to keep tracking on the central database.
+
+Tenant migration, retry, and rollback commands fail when a tenant adapter is configured and `data-migrations.connection` is still `null`. Central-only commands keep using the default connection.
 
 ### Running Tenant Migrations
 
 ```bash
-# All tenants — iterates through every tenant
+# All tenants
 php artisan data-migrate --scope=tenant
 
 # Specific tenant only
@@ -1083,9 +1097,9 @@ return [
     | The name and connection for the data_migrations tracking table. This table
     | records which migrations have run, their status, checksums, and timing.
     |
-    | IMPORTANT: In multi-tenant apps, set 'connection' to your central database
-    | connection name. If null, the default connection is used — which may switch
-    | to the tenant database when tenancy is initialized.
+    | In multi-tenant apps, set 'connection' to your central database
+    | connection name. If null, the default connection is used. That connection
+    | may switch to the tenant database when tenancy is initialized.
     |
     */
     'table' => 'data_migrations',
@@ -1097,8 +1111,8 @@ return [
     |--------------------------------------------------------------------------
     |
     | Prevents concurrent execution of data migrations. Uses Laravel's cache
-    | lock mechanism. The TTL is a safety net — if a migration crashes without
-    | releasing the lock, it will auto-expire after this many seconds.
+    | lock mechanism. The TTL is a safety net. If a migration crashes without
+    | releasing the lock, it will expire after this many seconds.
     |
     */
     'lock' => [
@@ -1113,11 +1127,14 @@ return [
     |
     | When enabled, a SHA-256 checksum of each migration file is recorded at
     | execution time. The verify command compares current checksums against
-    | stored ones to detect unauthorized modifications.
+    | stored ones to detect changed migration files.
     |
     | fail_on_drift: When true, the verify command fails (non-zero exit) when
     | a migration file has been modified after execution. When false, it warns
     | but still exits successfully (unless --strict is used).
+    |
+    | When enabled is false, checksums are not recorded during execution,
+    | shown by data-migrate:show, or checked by data-migrate:verify.
     |
     */
     'checksum' => [

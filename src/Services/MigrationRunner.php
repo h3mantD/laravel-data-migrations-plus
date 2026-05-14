@@ -73,13 +73,13 @@ class MigrationRunner
                 continue;
             }
 
-            $this->tenantAdapter->enter($tenant);
-
-            if ($this->onTenantStart instanceof \Closure) {
-                ($this->onTenantStart)($targetKey);
-            }
-
             try {
+                $this->tenantAdapter->enter($tenant);
+
+                if ($this->onTenantStart instanceof \Closure) {
+                    ($this->onTenantStart)($targetKey);
+                }
+
                 return $this->runScope(MigrationScope::Tenant, $targetKey, $pretend, $continueOnFailure, $specificName);
             } finally {
                 $this->tenantAdapter->leave();
@@ -99,14 +99,15 @@ class MigrationRunner
         $allPretended = [];
 
         foreach ($this->tenantAdapter->tenants() as $tenant) {
-            $this->tenantAdapter->enter($tenant);
             $key = $this->tenantAdapter->tenantKey($tenant);
 
-            if ($this->onTenantStart instanceof \Closure) {
-                ($this->onTenantStart)($key);
-            }
-
             try {
+                $this->tenantAdapter->enter($tenant);
+
+                if ($this->onTenantStart instanceof \Closure) {
+                    ($this->onTenantStart)($key);
+                }
+
                 $result = $this->runScope(MigrationScope::Tenant, $key, $pretend, $continueOnFailure, $specificName);
                 $allSuccessful = array_merge($allSuccessful, $result->successful);
                 $allFailed = array_merge($allFailed, $result->failed);
@@ -130,6 +131,11 @@ class MigrationRunner
         bool $continueOnFailure,
         ?string $specificName,
     ): RunResult {
+        $duplicates = $this->discovery->duplicateNames($scope);
+        if ($duplicates !== []) {
+            return new RunResult(failed: array_keys($duplicates));
+        }
+
         $discovered = $this->discovery->discover($scope);
         $completed = $this->tracking->getCompleted($scope, $targetKey);
         $blocked = $this->tracking->getAll($scope, $targetKey)
@@ -231,6 +237,10 @@ class MigrationRunner
 
     private function computeChecksumSafely(?string $filePath): ?string
     {
+        if (! (bool) config('data-migrations.checksum.enabled', true)) {
+            return null;
+        }
+
         if ($filePath === null) {
             return null;
         }

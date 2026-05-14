@@ -21,6 +21,7 @@ beforeEach(function (): void {
 
     $this->lock->shouldReceive('acquire')->andReturn(true)->byDefault();
     $this->lock->shouldReceive('release')->byDefault();
+    $this->discovery->shouldReceive('duplicateNames')->andReturn([])->byDefault();
 
     $this->runner = new MigrationRunner(
         discovery: $this->discovery,
@@ -219,6 +220,18 @@ it('fails when lock cannot be acquired', function (): void {
     expect($result->lockFailed)->toBeTrue();
 });
 
+it('blocks duplicate migration names within a scope before execution', function (): void {
+    $this->discovery->shouldReceive('duplicateNames')
+        ->with(MigrationScope::Central)
+        ->andReturn(['2026_04_01_100000_duplicate' => ['/one.php', '/two.php']]);
+    $this->discovery->shouldReceive('discover')->never();
+
+    $result = $this->runner->run(scope: MigrationScope::Central, targetKey: null, pretend: false, continueOnFailure: false);
+
+    expect($result->failed)->toBe(['2026_04_01_100000_duplicate']);
+    expect($this->tracking->getAll(MigrationScope::Central, null))->toBeEmpty();
+});
+
 it('calls validate() before up()', function (): void {
     $migration = new class extends DataMigration
     {
@@ -357,4 +370,18 @@ it('iterates tenants via adapter when targetKey is null', function (): void {
     );
 
     expect($result->successful)->toHaveCount(2);
+});
+
+it('leaves tenant context when entering a tenant throws', function (): void {
+    $this->tenantAdapter->shouldReceive('tenants')->andReturn(['tenant-a']);
+    $this->tenantAdapter->shouldReceive('tenantKey')->with('tenant-a')->andReturn('key-a');
+    $this->tenantAdapter->shouldReceive('enter')->with('tenant-a')->andThrow(new RuntimeException('enter failed'));
+    $this->tenantAdapter->shouldReceive('leave')->once();
+
+    expect(fn () => $this->runner->run(
+        scope: MigrationScope::Tenant,
+        targetKey: null,
+        pretend: false,
+        continueOnFailure: false,
+    ))->toThrow(RuntimeException::class, 'enter failed');
 });

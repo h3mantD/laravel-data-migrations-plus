@@ -1,5 +1,6 @@
 <?php
 
+use H3mantd\DataMigrations\Contracts\TenantAdapter;
 use H3mantd\DataMigrations\Enums\MigrationScope;
 use H3mantd\DataMigrations\Services\TrackingRepository;
 use H3mantd\DataMigrations\Tests\Fixtures\InMemoryTenantAdapter;
@@ -118,6 +119,12 @@ it('rejects invalid scope', function (): void {
         ->assertFailed();
 });
 
+it('rejects non-positive step values', function (string $step): void {
+    $this->artisan('data-migrate:rollback', ['--scope' => 'central', '--step' => $step])
+        ->assertFailed()
+        ->expectsOutputToContain('Invalid step');
+})->with(['0', '-1', 'abc']);
+
 it('fails explicit tenant scope when no adapter is configured', function (): void {
     $this->artisan('data-migrate:rollback', ['--scope' => 'tenant'])
         ->assertFailed();
@@ -126,6 +133,56 @@ it('fails explicit tenant scope when no adapter is configured', function (): voi
 it('fails tenant option when no adapter is configured', function (): void {
     $this->artisan('data-migrate:rollback', ['--tenant' => 'acme-1'])
         ->assertFailed();
+});
+
+it('fails when an explicit tenant key does not exist', function (): void {
+    config()->set('data-migrations.tenant_adapter', InMemoryTenantAdapter::class);
+    app()->instance(TenantAdapter::class, new InMemoryTenantAdapter);
+    InMemoryTenantAdapter::$tenants = ['acme-1'];
+
+    $this->artisan('data-migrate:rollback', ['--scope' => 'tenant', '--tenant' => 'missing'])
+        ->assertFailed()
+        ->expectsOutputToContain('Tenant not found: missing');
+});
+
+it('does not rollback central migrations when an explicit tenant key does not exist', function (): void {
+    config()->set('data-migrations.tenant_adapter', InMemoryTenantAdapter::class);
+    app()->instance(TenantAdapter::class, new InMemoryTenantAdapter);
+    InMemoryTenantAdapter::$tenants = ['acme-1'];
+
+    $stub = <<<'PHP'
+    <?php
+    use H3mantd\DataMigrations\DataMigration;
+    use H3mantd\DataMigrations\DataMigrationContext;
+    return new class extends DataMigration {
+        public bool $transactional = false;
+        public function up(DataMigrationContext $context): void {}
+        public function down(DataMigrationContext $context): void {}
+    };
+    PHP;
+    file_put_contents($this->centralDir.'/2026_04_01_100000_reversible.php', $stub);
+
+    $repo = app(TrackingRepository::class);
+    $id = $repo->recordStart('2026_04_01_100000_reversible', MigrationScope::Central, null, 'testing', 1, null);
+    $repo->recordSuccess($id, 100);
+
+    $this->artisan('data-migrate:rollback', ['--tenant' => 'missing'])
+        ->assertFailed()
+        ->expectsOutputToContain('Tenant not found: missing');
+
+    expect($repo->getCompleted(MigrationScope::Central, null))->toContain('2026_04_01_100000_reversible');
+});
+
+it('fails tenant rollback when tracking connection is not explicitly configured', function (): void {
+    config()->set('data-migrations.tenant_adapter', InMemoryTenantAdapter::class);
+    config()->set('data-migrations.connection');
+
+    app()->instance(TenantAdapter::class, new InMemoryTenantAdapter);
+    InMemoryTenantAdapter::$tenants = ['acme-1'];
+
+    $this->artisan('data-migrate:rollback', ['--scope' => 'tenant'])
+        ->assertFailed()
+        ->expectsOutputToContain('Set data-migrations.connection');
 });
 
 it('skips tenant rollback during default all scope when no adapter is configured', function (): void {
@@ -155,6 +212,9 @@ it('skips tenant rollback during default all scope when no adapter is configured
 
 it('rolls back tenant batches for all tenants', function (): void {
     config()->set('data-migrations.tenant_adapter', InMemoryTenantAdapter::class);
+    config()->set('data-migrations.connection', 'testing');
+
+    app()->instance(TenantAdapter::class, new InMemoryTenantAdapter);
     InMemoryTenantAdapter::$tenants = ['acme-1'];
     InMemoryTenantAdapter::$entered = [];
     InMemoryTenantAdapter::$leaveCount = 0;
@@ -184,6 +244,9 @@ it('rolls back tenant batches for all tenants', function (): void {
 
 it('enters tenant context when rolling back a specific tenant', function (): void {
     config()->set('data-migrations.tenant_adapter', InMemoryTenantAdapter::class);
+    config()->set('data-migrations.connection', 'testing');
+
+    app()->instance(TenantAdapter::class, new InMemoryTenantAdapter);
     InMemoryTenantAdapter::$tenants = ['acme-1', 'acme-2'];
     InMemoryTenantAdapter::$entered = [];
     InMemoryTenantAdapter::$leaveCount = 0;

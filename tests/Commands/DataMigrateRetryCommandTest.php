@@ -1,7 +1,10 @@
 <?php
 
+use H3mantd\DataMigrations\Contracts\TenantAdapter;
 use H3mantd\DataMigrations\Enums\MigrationScope;
 use H3mantd\DataMigrations\Services\TrackingRepository;
+use H3mantd\DataMigrations\Tests\Fixtures\InMemoryTenantAdapter;
+use Illuminate\Support\Facades\DB;
 
 beforeEach(function (): void {
     $this->centralDir = sys_get_temp_dir().'/dm-retry-test/central';
@@ -95,6 +98,62 @@ it('fails explicit tenant scope when no adapter is configured', function (): voi
 it('fails tenant option when no adapter is configured', function (): void {
     $this->artisan('data-migrate:retry', ['--tenant' => 'acme-1'])
         ->assertFailed();
+});
+
+it('fails when an explicit tenant key does not exist', function (): void {
+    config()->set('data-migrations.tenant_adapter', InMemoryTenantAdapter::class);
+    app()->instance(TenantAdapter::class, new InMemoryTenantAdapter);
+    InMemoryTenantAdapter::$tenants = ['acme-1'];
+
+    $this->artisan('data-migrate:retry', ['--scope' => 'tenant', '--tenant' => 'missing'])
+        ->assertFailed()
+        ->expectsOutputToContain('Tenant not found: missing');
+});
+
+it('retries stale running migrations after the lock ttl', function (): void {
+    config()->set('data-migrations.lock.ttl', 60);
+
+    $stub = <<<'PHP'
+    <?php
+    use H3mantd\DataMigrations\DataMigration;
+    use H3mantd\DataMigrations\DataMigrationContext;
+    return new class extends DataMigration {
+        public bool $transactional = false;
+        public function up(DataMigrationContext $context): void {}
+    };
+    PHP;
+    file_put_contents($this->centralDir.'/2026_04_01_100000_stale_running.php', $stub);
+
+    $repo = app(TrackingRepository::class);
+    $id = $repo->recordStart('2026_04_01_100000_stale_running', MigrationScope::Central, null, 'testing', 1, null);
+    DB::table('data_migrations')->where('id', $id)->update(['started_at' => now()->subSeconds(61)]);
+
+    $this->artisan('data-migrate:retry', ['--scope' => 'central'])->assertSuccessful();
+
+    expect($repo->getCompleted(MigrationScope::Central, null))->toContain('2026_04_01_100000_stale_running');
+});
+
+it('does not retry fresh running migrations before the lock ttl', function (): void {
+    config()->set('data-migrations.lock.ttl', 60);
+
+    $stub = <<<'PHP'
+    <?php
+    use H3mantd\DataMigrations\DataMigration;
+    use H3mantd\DataMigrations\DataMigrationContext;
+    return new class extends DataMigration {
+        public bool $transactional = false;
+        public function up(DataMigrationContext $context): void {}
+    };
+    PHP;
+    file_put_contents($this->centralDir.'/2026_04_01_100000_fresh_running.php', $stub);
+
+    $repo = app(TrackingRepository::class);
+    $id = $repo->recordStart('2026_04_01_100000_fresh_running', MigrationScope::Central, null, 'testing', 1, null);
+    DB::table('data_migrations')->where('id', $id)->update(['started_at' => now()->subSeconds(30)]);
+
+    $this->artisan('data-migrate:retry', ['--scope' => 'central'])->assertSuccessful();
+
+    expect($repo->getAll(MigrationScope::Central, null)->first()->status)->toBe('running');
 });
 
 it('skips tenant retry during default all scope when no adapter is configured', function (): void {

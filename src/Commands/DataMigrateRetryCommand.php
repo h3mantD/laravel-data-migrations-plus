@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace H3mantd\DataMigrations\Commands;
 
+use DateTimeInterface;
 use H3mantd\DataMigrations\Commands\Concerns\ParsesMigrationScopes;
 use H3mantd\DataMigrations\Contracts\TenantAdapter;
 use H3mantd\DataMigrations\Enums\MigrationScope;
@@ -13,6 +14,7 @@ use H3mantd\DataMigrations\Services\MigrationRunner;
 use H3mantd\DataMigrations\Services\TrackingRepository;
 use H3mantd\DataMigrations\Support\NullTenantAdapter;
 use Illuminate\Console\Command;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use stdClass;
 
@@ -53,6 +55,14 @@ class DataMigrateRetryCommand extends Command
 
         if (($scope === 'tenant' || $tenantKey !== null) && $tenantAdapter instanceof NullTenantAdapter) {
             return $this->failWithMessage('No tenant adapter configured. Set data-migrations.tenant_adapter in your config.', $json);
+        }
+
+        if ($tenantKey !== null && ! $this->tenantExists($tenantAdapter, $tenantKey)) {
+            return $this->failWithMessage('Tenant not found: '.$tenantKey, $json);
+        }
+
+        if ($this->tenantTrackingConnectionMissing($scopes, $tenantAdapter)) {
+            return $this->failWithMessage($this->missingTenantTrackingConnectionMessage(), $json);
         }
 
         /** @var list<string> $retried */
@@ -135,11 +145,31 @@ class DataMigrateRetryCommand extends Command
     {
         if ($scope === MigrationScope::Tenant && $targetKey === null) {
             return $tracking->getAllByScope($scope)
-                ->where('status', MigrationStatus::Failed->value)
+                ->filter(fn (stdClass $record): bool => $this->isRetryableRecord($record))
                 ->values();
         }
 
-        return $tracking->getFailed($scope, $targetKey);
+        return $tracking->getRetryable($scope, $targetKey);
+    }
+
+    private function isRetryableRecord(stdClass $record): bool
+    {
+        if ($record->status === MigrationStatus::Failed->value) {
+            return true;
+        }
+
+        if ($record->status !== MigrationStatus::Running->value || $record->started_at === null) {
+            return false;
+        }
+
+        if (! is_string($record->started_at) && ! $record->started_at instanceof DateTimeInterface) {
+            return false;
+        }
+
+        $ttlConfig = config('data-migrations.lock.ttl', 1800);
+        $ttl = is_int($ttlConfig) ? $ttlConfig : 1800;
+
+        return Carbon::parse($record->started_at)->lte(now()->subSeconds($ttl));
     }
 
     private function tenantExists(TenantAdapter $tenantAdapter, string $targetKey): bool
