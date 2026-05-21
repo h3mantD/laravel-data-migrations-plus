@@ -9,6 +9,7 @@ use H3mantd\DataMigrations\DataMigrationContext;
 use H3mantd\DataMigrations\Enums\MigrationScope;
 use H3mantd\DataMigrations\Enums\MigrationStatus;
 use H3mantd\DataMigrations\Support\NullTenantAdapter;
+use Illuminate\Contracts\Debug\ExceptionHandler;
 use Illuminate\Database\DatabaseManager;
 use Throwable;
 
@@ -21,10 +22,14 @@ class MigrationRunner
         private readonly LockService $lock,
         private readonly TenantAdapter $tenantAdapter,
         private readonly DatabaseManager $db,
+        private readonly ExceptionHandler $exceptions,
     ) {}
 
     /** @var (\Closure(string): void)|null */
     private ?\Closure $onTenantStart = null;
+
+    /** @var (\Closure(string, Throwable): void)|null */
+    private ?\Closure $onMigrationFailure = null;
 
     /**
      * @param  (\Closure(string): void)|null  $onTenantStart
@@ -32,6 +37,16 @@ class MigrationRunner
     public function onTenantStart(?\Closure $onTenantStart): self
     {
         $this->onTenantStart = $onTenantStart;
+
+        return $this;
+    }
+
+    /**
+     * @param  (\Closure(string, Throwable): void)|null  $onMigrationFailure
+     */
+    public function onMigrationFailure(?\Closure $onMigrationFailure): self
+    {
+        $this->onMigrationFailure = $onMigrationFailure;
 
         return $this;
     }
@@ -138,8 +153,10 @@ class MigrationRunner
 
         $discovered = $this->discovery->discover($scope);
         $completed = $this->tracking->getCompleted($scope, $targetKey);
-        $blocked = $this->tracking->getAll($scope, $targetKey)
-            ->whereIn('status', [MigrationStatus::Running->value, MigrationStatus::Failed->value])
+        $retryable = $this->tracking->getRetryable($scope, $targetKey)
+            ->pluck('migration_name');
+        $running = $this->tracking->getAll($scope, $targetKey)
+            ->where('status', MigrationStatus::Running->value)
             ->pluck('migration_name');
 
         /** @var list<string> $successful */
@@ -163,7 +180,7 @@ class MigrationRunner
                 continue;
             }
 
-            if ($blocked->contains($name)) {
+            if ($running->contains($name) && ! $retryable->contains($name)) {
                 continue;
             }
 
@@ -183,7 +200,6 @@ class MigrationRunner
 
             $filePath = $this->discovery->getFilePath($name, $scope);
             $checksumValue = $this->computeChecksumSafely($filePath);
-
             $recordId = $this->tracking->recordStart(
                 name: $name,
                 scope: $scope,
@@ -214,12 +230,17 @@ class MigrationRunner
                 $this->tracking->recordSuccess($recordId, $durationMs);
                 $successful[] = $name;
             } catch (Throwable $e) {
-                $durationMs = (int) ((hrtime(true) - $startTime) / 1_000_000);
-                $this->tracking->recordFailure($recordId, $e->getMessage(), $durationMs);
+                $this->tracking->markRolledBack($recordId);
                 $failed[] = $name;
 
                 if (! $continueOnFailure) {
-                    break;
+                    throw $e;
+                }
+
+                $this->exceptions->report($e);
+
+                if ($this->onMigrationFailure instanceof \Closure) {
+                    ($this->onMigrationFailure)($name, $e);
                 }
             }
         }

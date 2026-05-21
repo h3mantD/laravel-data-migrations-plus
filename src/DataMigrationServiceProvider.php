@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace H3mantd\DataMigrations;
 
 use H3mantd\DataMigrations\Commands\DataMigrateCommand;
-use H3mantd\DataMigrations\Commands\DataMigrateRetryCommand;
 use H3mantd\DataMigrations\Commands\DataMigrateRollbackCommand;
 use H3mantd\DataMigrations\Commands\DataMigrateShowCommand;
 use H3mantd\DataMigrations\Commands\DataMigrateStatusCommand;
@@ -18,6 +17,7 @@ use H3mantd\DataMigrations\Services\LockService;
 use H3mantd\DataMigrations\Services\MigrationRunner;
 use H3mantd\DataMigrations\Services\TrackingRepository;
 use H3mantd\DataMigrations\Support\NullTenantAdapter;
+use Illuminate\Contracts\Debug\ExceptionHandler;
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Database\DatabaseManager;
 use Spatie\LaravelPackageTools\Package;
@@ -36,7 +36,6 @@ class DataMigrationServiceProvider extends PackageServiceProvider
             ->hasCommand(DataMigrateStatusCommand::class)
             ->hasCommand(DataMigrateVerifyCommand::class)
             ->hasCommand(DataMigrateShowCommand::class)
-            ->hasCommand(DataMigrateRetryCommand::class)
             ->hasCommand(DataMigrateRollbackCommand::class);
     }
 
@@ -70,6 +69,8 @@ class DataMigrationServiceProvider extends PackageServiceProvider
             $tenantAdapter = $app->make(TenantAdapter::class);
             /** @var DatabaseManager $db */
             $db = $app->make('db');
+            /** @var ExceptionHandler $exceptions */
+            $exceptions = $app->make(ExceptionHandler::class);
 
             return new MigrationRunner(
                 discovery: $discovery,
@@ -78,6 +79,7 @@ class DataMigrationServiceProvider extends PackageServiceProvider
                 lock: $lock,
                 tenantAdapter: $tenantAdapter,
                 db: $db,
+                exceptions: $exceptions,
             );
         });
     }

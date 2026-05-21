@@ -6,7 +6,7 @@
 
 A simple, migration-like system for **versioned application data changes** in Laravel. Use it for backfills, reference data, default records, reconciliation patches, and other data changes that should run once and be tracked.
 
-The default path is intentionally small: create a data migration, write `up()`, run `data-migrate`. Advanced production features such as tenancy, checksums, retry, rollback, and verification are available when you need them.
+The default path is intentionally small: create a data migration, write `up()`, run `data-migrate`. Advanced production features such as tenancy, checksums, rollback, and verification are available when you need them.
 
 ## Table of Contents
 
@@ -29,7 +29,6 @@ The default path is intentionally small: create a data migration, write `up()`, 
   - [Pre-flight Validation](#pre-flight-validation)
   - [Reversible Migrations](#reversible-migrations)
   - [Inspecting a Migration](#inspecting-a-migration)
-  - [Retrying Failed Migrations](#retrying-failed-migrations)
   - [Rolling Back](#rolling-back)
   - [Integrity Verification](#integrity-verification)
   - [Multi-Tenancy](#multi-tenancy)
@@ -197,7 +196,7 @@ php artisan data-migrate --pretend
 php artisan data-migrate:status
 ```
 
-This shows discovered migrations, completed migrations, failed migrations, batch numbers, and when each migration ran.
+This shows discovered migrations, completed migrations, pending migrations, batch numbers, and when each migration ran.
 
 ### Query Builder and Optional Helpers
 
@@ -357,6 +356,8 @@ php artisan data-migrate --json
 
 When `--scope=all` is used, central migrations run first, then tenant migrations. If no tenant adapter is configured, the tenant step is skipped. Explicit tenant commands such as `--scope=tenant` or `--tenant=acme` fail with a clear configuration error when no adapter is configured.
 
+Failed migrations are handled like Laravel schema migrations: the error is logged, the exception is rendered in the console, and no successful execution record remains. The runner uses a temporary `running` record while a migration executes so concurrent processes do not apply the same migration twice. If the migration fails, that temporary record is removed. After you fix the migration or underlying data issue, run `php artisan data-migrate` again and the same migration will be picked up automatically. Use `--continue-on-failure` when you want later pending migrations to keep running after an earlier migration fails.
+
 ### Migration Scopes
 
 A migration's scope is determined by its directory, not by a class property.
@@ -447,7 +448,7 @@ When transactions are disabled, your migration should be idempotent so it can sa
 
 ### Pre-flight Validation
 
-Override `validate()` to check required tables, columns, or data before `up()` runs. If validation throws, the migration is marked as failed and `up()` is not called.
+Override `validate()` to check required tables, columns, or data before `up()` runs. If validation throws, the error is logged and rendered in the console, no successful execution record is written, and `up()` is not called.
 
 ```php
 return new class extends DataMigration
@@ -507,20 +508,6 @@ php artisan data-migrate:show 2026_04_01_100000_add_default_roles --json
 It displays the file path, scope, type, transactional flag, current checksum when checksums are enabled, and execution history.
 
 If central and tenant migrations share the same name, pass `--scope=central` or `--scope=tenant`.
-
-### Retrying Failed Migrations
-
-Retry runs migrations that previously failed. It does not run unrelated pending migrations.
-
-```bash
-php artisan data-migrate:retry
-php artisan data-migrate:retry --scope=tenant --tenant=acme
-php artisan data-migrate:retry --json
-```
-
-If a process dies after marking a migration as `running`, retry can rerun that row when its `started_at` timestamp is older than `data-migrations.lock.ttl`.
-
-Explicit tenant retry commands require a tenant adapter and an explicit central tracking connection.
 
 ### Rolling Back
 
@@ -679,7 +666,7 @@ In many tenant applications, the default database connection changes after enter
 'connection' => 'mysql',
 ```
 
-Tenant migration, retry, and rollback commands fail when a tenant adapter is configured and `data-migrations.connection` is still `null`. Central-only commands keep using the default connection.
+Tenant migration and rollback commands fail when a tenant adapter is configured and `data-migrations.connection` is still `null`. Central-only commands keep using the default connection.
 
 Run tenant migrations:
 
@@ -702,7 +689,6 @@ Several commands support `--json` for automation:
 php artisan data-migrate --json
 php artisan data-migrate:status --json
 php artisan data-migrate:show 2026_04_01_100000_add_default_roles --json
-php artisan data-migrate:retry --json
 ```
 
 Recommended CI checks:
@@ -810,12 +796,12 @@ Executions are recorded in `data_migrations` by default.
 | `target_key` | Tenant identifier; central migrations use an empty string |
 | `connection_name` | Database connection used for execution |
 | `batch` | Batch number for grouped runs |
-| `status` | `pending`, `running`, `completed`, or `failed` |
+| `status` | `completed` for successfully executed migrations |
 | `checksum` | SHA-256 hash of the file at execution time, when enabled |
 | `started_at` | When execution began |
 | `completed_at` | When execution finished |
 | `duration_ms` | Execution duration |
-| `error_message` | Failure details |
+| `error_message` | Reserved for older failed execution records; new failures are logged and rendered in the console instead of being stored |
 
 Central and tenant migrations share the same table. The unique key includes migration name, scope, and target key.
 

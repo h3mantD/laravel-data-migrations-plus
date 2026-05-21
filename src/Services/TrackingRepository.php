@@ -18,6 +18,49 @@ class TrackingRepository
         private readonly DatabaseManager $db,
     ) {}
 
+    public function recordCompleted(
+        string $name,
+        MigrationScope $scope,
+        ?string $targetKey,
+        string $connectionName,
+        int $batch,
+        ?string $checksum,
+        int $durationMs,
+    ): int {
+        $existing = $this->scopedQuery($scope, $targetKey)
+            ->where('migration_name', $name)
+            ->first();
+
+        $attributes = [
+            'migration_name' => $name,
+            'scope_type' => $scope->value,
+            'target_key' => $this->storedTargetKey($targetKey),
+            'connection_name' => $connectionName,
+            'batch' => $batch,
+            'status' => MigrationStatus::Completed->value,
+            'checksum' => $checksum,
+            'started_at' => now()->subMilliseconds($durationMs),
+            'completed_at' => now(),
+            'duration_ms' => $durationMs,
+            'error_message' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ];
+
+        if ($existing !== null) {
+            /** @var int $id */
+            $id = $existing->id;
+
+            unset($attributes['migration_name'], $attributes['scope_type'], $attributes['target_key'], $attributes['created_at']);
+
+            $this->connection()->table($this->table())->where('id', $id)->update($attributes);
+
+            return $id;
+        }
+
+        return $this->connection()->table($this->table())->insertGetId($attributes);
+    }
+
     public function recordStart(
         string $name,
         MigrationScope $scope,
@@ -26,14 +69,13 @@ class TrackingRepository
         int $batch,
         ?string $checksum,
     ): int {
-        $pending = $this->scopedQuery($scope, $targetKey)
+        $existing = $this->scopedQuery($scope, $targetKey)
             ->where('migration_name', $name)
-            ->where('status', MigrationStatus::Pending->value)
             ->first();
 
-        if ($pending !== null) {
+        if ($existing !== null) {
             /** @var int $id */
-            $id = $pending->id;
+            $id = $existing->id;
 
             $this->connection()->table($this->table())->where('id', $id)->update([
                 'connection_name' => $connectionName,

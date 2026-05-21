@@ -12,6 +12,8 @@ use H3mantd\DataMigrations\Services\MigrationRunner;
 use H3mantd\DataMigrations\Services\RunResult;
 use H3mantd\DataMigrations\Support\NullTenantAdapter;
 use Illuminate\Console\Command;
+use Illuminate\Contracts\Debug\ExceptionHandler;
+use Throwable;
 
 class DataMigrateCommand extends Command
 {
@@ -84,6 +86,11 @@ class DataMigrateCommand extends Command
             $runner->onTenantStart(function (string $key): void {
                 $this->components->twoColumnDetail('Tenant: '.$key, '<fg=cyan>RUNNING</>');
             });
+
+            $runner->onMigrationFailure(function (string $name, Throwable $e): void {
+                $this->components->twoColumnDetail($name, '<fg=red;options=bold>FAILED</>');
+                app(ExceptionHandler::class)->renderForConsole($this->output, $e);
+            });
         }
 
         foreach ($scopes as $migrationScope) {
@@ -95,13 +102,23 @@ class DataMigrateCommand extends Command
             /** @var string|null $targetKeyStr */
             $targetKeyStr = $targetKey;
 
-            $result = $runner->run(
-                scope: $migrationScope,
-                targetKey: $targetKeyStr,
-                pretend: $pretend,
-                continueOnFailure: $continueOnFailure,
-                specificName: $specificNameStr,
-            );
+            try {
+                $result = $runner->run(
+                    scope: $migrationScope,
+                    targetKey: $targetKeyStr,
+                    pretend: $pretend,
+                    continueOnFailure: $continueOnFailure,
+                    specificName: $specificNameStr,
+                );
+            } catch (Throwable $e) {
+                if (! $json) {
+                    throw $e;
+                }
+
+                app(ExceptionHandler::class)->report($e);
+
+                return $this->failWithMessage($e->getMessage(), true);
+            }
 
             if ($result->lockFailed) {
                 if ($json) {

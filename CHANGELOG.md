@@ -19,17 +19,20 @@ All notable changes to `laravel-data-migrations-plus` will be documented in this
 
 - Retry stale `running` migration rows when their `started_at` timestamp is older than the configured lock TTL.
 - Reject duplicate migration names within the same scope before execution.
-- Validate explicit tenant keys before migration, retry, and rollback commands run.
+- Validate explicit tenant keys before migration and rollback commands run.
 - Stop tenant rollback commands from rolling back central migrations before an invalid tenant is rejected.
 - Clean up tenant context even when entering a tenant throws an exception.
-- Require an explicit central tracking connection for tenant migration, retry, and rollback commands when a tenant adapter is configured.
+- Require an explicit central tracking connection for tenant migration and rollback commands when a tenant adapter is configured.
 - Respect `checksum.enabled=false` during execution and in `data-migrate:show` output.
 - Require `data-migrate:rollback --step` to be a positive integer.
+- Handle failed data migrations like Laravel schema migrations: log and render the error, write no failed execution row, and rerun the migration on the next `data-migrate` after the issue is fixed.
+- Complete legacy failed, pending, or running tracking rows in place after a successful rerun so upgrades from earlier versions do not hit duplicate tracking keys.
 
 ### Changed
 
 - `data-migrate:show` accepts `--scope=central|tenant` and requires it when central and tenant migrations share a name.
 - Runtime Illuminate package dependencies are declared directly in `composer.json`.
+- Removed the `data-migrate:retry` command because failed migrations are retried by running `data-migrate` again.
 
 ## v1.0.1 - 2026-05-07
 
@@ -52,21 +55,20 @@ A migration-like system for versioned application data changes in Laravel.
 - `data-migrate:status` — inspect migration state with per-tenant visibility, `--pending`, `--failed`, and `--json` filters
 - `data-migrate:show` — inspect a specific migration's details and per-tenant execution history
 - `data-migrate:verify` — check integrity (missing files, checksum drift, duplicates) with `--strict` for CI
-- `data-migrate:retry` — retry failed migrations without running unrelated pending ones
 - `data-migrate:rollback` — roll back migrations that implement `down()`, with `--step` support
 
 #### Core Features
 
 - Central and tenant scopes — scope determined by file path (`database/data-migrations/` vs `database/data-migrations/tenant/`)
 - Tenant-agnostic via `TenantAdapter` contract — works with Stancl Tenancy, Spatie Multitenancy, custom solutions, or no tenancy at all
-- Tracking table (`data_migrations`) with batch, status, checksum, duration, and error tracking
+- Tracking table (`data_migrations`) with batch, status, checksum, and duration tracking
 - SHA-256 checksum verification with configurable hard-fail on drift
 - Cache-based locking to prevent concurrent execution
 - Transaction support per migration via `$transactional` property
 - Pre-flight validation via `validate()` method
 - Pretend (dry-run) mode
 - JSON output for all commands
-- Production safety (`--force` required for `data-migrate`, `data-migrate:retry`, `data-migrate:rollback`)
+- Production safety (`--force` required for `data-migrate` and `data-migrate:rollback`)
 - Per-tenant progress feedback during batch execution
 
 #### Built-in Helpers
