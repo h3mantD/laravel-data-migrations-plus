@@ -4,6 +4,8 @@ All notable changes to `laravel-data-migrations-plus` will be documented in this
 
 ## Unreleased
 
+## v1.0.4 - 2026-05-21
+
 ### Fixed
 
 - Retry stale `running` migration rows when their `started_at` timestamp is older than the configured lock TTL.
