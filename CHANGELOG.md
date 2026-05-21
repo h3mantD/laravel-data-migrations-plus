@@ -2,17 +2,6 @@
 
 All notable changes to `laravel-data-migrations-plus` will be documented in this file.
 
-## v1.0.3 - 2026-05-14
-
-### What's Changed
-
-- Hardened data migration command handling.
-- Simplified README usage flow with clearer simple and advanced sections.
-
-### Verification
-
-- Rector, Pint, PHPStan, and full test suite passed before release.
-
 ## Unreleased
 
 ### Fixed
@@ -33,6 +22,17 @@ All notable changes to `laravel-data-migrations-plus` will be documented in this
 - `data-migrate:show` accepts `--scope=central|tenant` and requires it when central and tenant migrations share a name.
 - Runtime Illuminate package dependencies are declared directly in `composer.json`.
 - Removed the `data-migrate:retry` command because failed migrations are retried by running `data-migrate` again.
+
+## v1.0.3 - 2026-05-14
+
+### What's Changed
+
+- Hardened data migration command handling.
+- Simplified README usage flow with clearer simple and advanced sections.
+
+### Verification
+
+- Rector, Pint, PHPStan, and full test suite passed before release.
 
 ## v1.0.1 - 2026-05-07
 
